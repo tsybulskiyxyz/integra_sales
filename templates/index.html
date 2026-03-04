@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integra Sales</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #000000;
+            --surface: #0a0a0a;
+            --border: #1a1a1a;
+            --text: #f0f0f0;
+            --muted: #6b6b6b;
+            --red: #ff4444;
+            --green: #00cc66;
+            --orange: #ff9500;
+            --purple: #b366ff;
+            --accent: #ffffff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        ::selection { background: rgba(255,255,255,0.15); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1 {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: border-color 0.2s;
+        }
+        .card:hover { border-color: rgba(255,255,255,0.2); }
+        .form-row {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        input, textarea, select {
+            background: #111;
+            border: 1px solid #333;
+            color: var(--text);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: #555; background: #151515; outline: none; }
+        .econom-input, .status-select { border-color: #333; background: #111; }
+        input[type="text"] { flex: 1; min-width: 150px; }
+        button {
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+        button:hover { opacity: 0.85; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        .btn-primary { background: #fff; color: #000; }
+        .btn-green { background: var(--green); color: #000; }
+        .btn-orange { background: var(--orange); color: #000; }
+        .btn-purple { background: var(--purple); color: #fff; }
+        .btn-red { background: var(--red); color: #fff; }
+        .btn-muted { background: #1a1a1a; color: var(--muted); border: 1px solid var(--border); }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat { text-align: center; padding: 0.75rem; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; background: rgba(255,255,255,0.02); }
+        .stat-value { font-size: 1.75rem; font-weight: 500; }
+        .stat-label { font-size: 0.7rem; color: var(--muted); }
+        .stat-value.target { color: var(--green); }
+        .stat-value.closed { color: var(--purple); }
+        .stat-value.days { color: #fff; }
+        .stat-value.avg { color: var(--orange); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #222; }
+        th { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
+        tr.row-green { background: rgba(255,255,255,0.02); }
+        tr.row-green:hover { background: rgba(255,255,255,0.04); }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            color: #fff;
+        }
+        .badge-green { background: var(--green); }
+        .badge-unknown { background: var(--border); }
+        .error { color: var(--red); font-size: 0.85rem; margin-top: 0.5rem; }
+        .loading { color: var(--muted); padding: 2rem; text-align: center; }
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #050505;
+            border: 1px solid #1a1a1a;
+            border-radius: 10px;
+            padding: 1.5rem;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal h3 { margin-bottom: 1rem; }
+        .modal-close { margin-top: 1rem; }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .tab { padding: 0.5rem 1rem; cursor: pointer; border-radius: 4px; background: #111; color: var(--muted); border: 1px solid rgba(255,255,255,0.15); transition: all 0.15s; }
+        .tab:hover { color: var(--text); border-color: #333; }
+        .tab.active { background: #fff; color: #000; border-color: #fff; }
+        .econom-input { min-width: 120px; }
+        .status-select { min-width: 140px; font-size: 0.8rem; }
+        .date-cell { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+        .calls-table { table-layout: fixed; }
+        .calls-table th:nth-child(1), .calls-table td:nth-child(1) { width: 7.5rem; }
+        .calls-table th:nth-child(2), .calls-table td:nth-child(2) { width: 9rem; }
+        .calls-table th:nth-child(3), .calls-table td:nth-child(3) { width: 5.5rem; }
+        .calls-table th:nth-child(4), .calls-table td:nth-child(4) { width: 13rem; }
+        .calls-table th:nth-child(5), .calls-table td:nth-child(5) { width: 11rem; }
+        .calls-table th:nth-child(6), .calls-table td:nth-child(6) { width: 5.5rem; }
+        .calls-table .econom-input { width: 100%; min-width: 0; box-sizing: border-box; }
+        .calls-table .actions-cell { display: flex; gap: 0.35rem; flex-wrap: nowrap; }
+        .calls-table .actions-cell button { flex-shrink: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem; white-space: nowrap; }
+        .tasks-table { width: 100%; table-layout: fixed; }
+        .tasks-table th, .tasks-table td { padding: 0.6rem 0.75rem; vertical-align: middle; }
+        .tasks-table th:nth-child(1), .tasks-table td:nth-child(1) { width: 10rem; }
+        .tasks-table th:nth-child(2), .tasks-table td:nth-child(2) { width: 12rem; }
+        .tasks-table th:nth-child(3), .tasks-table td:nth-child(3) { width: auto; min-width: 200px; }
+        .tasks-table th:nth-child(4), .tasks-table td:nth-child(4) { width: 8rem; }
+        .tasks-table th:nth-child(5), .tasks-table td:nth-child(5) { width: 7rem; padding-right: 0.75rem; white-space: nowrap; }
+        .tasks-table th:nth-child(6), .tasks-table td:nth-child(6) { width: 5rem; padding-left: 0.75rem; padding-right: 0.5rem; text-align: left; }
+        .tasks-table .tasks-del-btn { min-width: 1.5rem; width: 1.5rem; height: 1.5rem; padding: 0; font-size: 0.75rem; line-height: 1; }
+        .task-cell-expand { cursor: pointer; color: var(--muted); font-size: 0.7rem; margin-left: 0.3rem; }
+        .task-cell-expand:hover { color: var(--accent); }
+        .task-full { white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+        .task-client-link { cursor: pointer; margin-left: 0.3rem; opacity: 0.7; }
+        .task-client-link:hover { opacity: 1; }
+        .filters { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .filter-btn {
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.02);
+            color: var(--muted);
+            transition: all 0.15s;
+        }
+        .filter-btn:hover { border-color: #444; color: var(--text); }
+        .filter-btn.active { background: #fff; color: #000; border-color: #fff; }
+        .filter-btn .count { font-weight: 500; margin-left: 0.3rem; }
+        .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+        .team-card {
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            position: relative;
+            transition: border-color 0.15s;
+        }
+        .team-card:hover { border-color: #444; }
+        .team-card .tc-name { font-size: 1rem; font-weight: 500; }
+        .team-card .tc-role {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            color: #fff;
+            width: fit-content;
+        }
+        .team-card .tc-role-sales_manager { background: #fff; color: #000 !important; }
+        .tc-role-estimator { background: var(--orange); }
+        .tc-role-engineer { background: var(--green); }
+        .tc-role-sales_head { background: var(--purple); }
+        .tc-role-test { background: #444; color: #fff; }
+        .team-card .tc-tg { font-size: 0.8rem; color: #999; display: flex; align-items: center; gap: 0.3rem; }
+        .team-card .tc-del { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; color: #666; cursor: pointer; font-size: 1rem; padding: 0.2rem; }
+        .team-card .tc-del:hover { color: var(--red); }
+        .timeline-modal .modal-content { max-width: 520px; max-height: 80vh; display: flex; flex-direction: column; }
+        .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .timeline-header h3 { margin: 0; }
+        .timeline-list { flex: 1; overflow-y: auto; max-height: 55vh; }
+        .timeline-item { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+        .timeline-item:last-child { border-bottom: none; }
+        .tl-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+        .tl-icon { font-size: 0.9rem; }
+        .tl-type { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+        .tl-time { font-size: 0.7rem; color: var(--muted); margin-left: auto; }
+        .tl-del { background: transparent; color: var(--muted); padding: 0.2rem 0.4rem; font-size: 0.75rem; opacity: 0.6; }
+        .tl-del:hover { color: var(--red); opacity: 1; }
+        .tl-desc { font-size: 0.85rem; color: var(--text); }
+        .tl-live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: 0.5rem; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .funnel { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .funnel-step { text-align: center; flex: 1; min-width: 80px; padding: 0.5rem 0.25rem; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.25); }
+        .funnel-step .f-count { font-size: 1.3rem; font-weight: 500; }
+        .funnel-step .f-label { font-size: 0.65rem; color: var(--muted); }
+        .funnel-step .f-conv { font-size: 0.65rem; color: var(--accent); }
+        .funnel-arrow { color: var(--muted); font-size: 1.1rem; }
+        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .dash-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+        .dash-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .dash-card-header h4 { margin: 0; font-size: 0.9rem; }
+        .dash-card-count {
+            font-size: 0.75rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            color: #fff;
+        }
+        .dash-card-body { overflow-y: auto; flex: 1; }
+        .dash-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+        .dash-item:last-child { border-bottom: none; }
+        .dash-item-info { flex: 1; min-width: 0; }
+        .dash-item-phone { color: var(--accent); }
+        .dash-item-name { color: var(--muted); font-size: 0.75rem; }
+        .dash-item-meta { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+        .dash-item-action { flex-shrink: 0; }
+        .dash-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 0.75rem;
+        }
+        .dash-summary-item { text-align: center; padding: 0.75rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; }
+        .dash-summary-val { font-size: 1.4rem; font-weight: 500; }
+        .dash-summary-label { font-size: 0.65rem; color: var(--muted); margin-top: 0.15rem; }
+        .dash-empty { color: var(--muted); font-size: 0.85rem; padding: 1rem 0; text-align: center; }
+        .app-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            width: 100%;
+            gap: 0.5rem;
+        }
+        .app-header {
+            justify-content: space-between;
+        }
+        .app-header-logo {
+            font-family: 'Unbounded', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .app-header-user {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.85rem;
+        }
+        .app-header-user .user-name {
+            color: var(--text);
+            font-weight: 500;
+        }
+        .app-header-user .user-role {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+        .app-header-user .btn-logout {
+            color: var(--red);
+            text-decoration: none;
+            font-size: 0.8rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255,68,68,0.4);
+            background: rgba(255,68,68,0.08);
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .app-header-user .btn-logout:hover {
+            background: rgba(255,68,68,0.18);
+            border-color: var(--red);
+        }
+        @media (max-width: 700px) {
+            .container { padding: 0.75rem; }
+            .app-header { gap: 0.25rem; }
+            .app-header-user { font-size: 0.7rem; gap: 0.4rem; }
+            h1 { font-size: 1.1rem; }
+            .dash-grid { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+            .stat-value { font-size: 1.2rem; }
+            .stat-label { font-size: 0.6rem; }
+            .tabs { flex-wrap: wrap; gap: 0.3rem; }
+            .tab { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+            .filters { gap: 0.25rem; }
+            .filter-btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+            table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+            th, td { padding: 0.35rem 0.5rem; font-size: 0.75rem; }
+            .econom-input { min-width: 80px; }
+            .status-select { min-width: 100px; font-size: 0.7rem; }
+            .form-row { gap: 0.35rem; }
+            input, textarea, select { font-size: 0.8rem; padding: 0.4rem 0.6rem; }
+            button { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+            .modal-content { padding: 1rem; width: 95%; max-width: none; }
+            .card { padding: 0.75rem; }
+            .team-grid { grid-template-columns: 1fr; }
+            .funnel { gap: 0.15rem; }
+            .funnel-step { min-width: 60px; padding: 0.35rem 0.15rem; }
+            .funnel-step .f-count { font-size: 1rem; }
+            .funnel-step .f-label { font-size: 0.55rem; }
+            .funnel-arrow { font-size: 0.8rem; }
+            .dash-summary { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+            .dash-summary-val { font-size: 1.1rem; }
+            .dash-summary-label { font-size: 0.58rem; }
+            .dash-card { max-height: 250px; }
+        }
+        @media (max-width: 400px) {
+            .container { padding: 0.5rem; }
+            h1 { font-size: 0.95rem; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .dash-summary { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="app-header">
+            <div class="app-header-logo">Integra Sales</div>
+            <div class="app-header-user">
+                <span class="user-name">{{ user.name }}</span>
+                <span class="user-role">{{ user.role_label }}</span>
+                <a href="/logout" class="btn-logout" title="Выйти">Выйти</a>
+            </div>
+        </div>
+
+        <div id="loadingMsg" class="loading">Загрузка...</div>
+        <div id="errorMsg" class="error" style="display:none"></div>
+
+        {% if not is_manager %}
+        <div class="card" id="workerCard" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                <h3>📋 Мои задачи</h3>
+                <div class="filters" style="margin-bottom:0">
+                    <button class="filter-btn active" onclick="filterWorkerTasks('all', this)">Все</button>
+                    <button class="filter-btn" onclick="filterWorkerTasks('new', this)">Новые</button>
+                    <button class="filter-btn" onclick="filterWorkerTasks('in_progress', this)">В работе</button>
+                    <button class="filter-btn" onclick="filterWorkerTasks('done', this)">Готово</button>
+                </div>
+            </div>
+            <div id="workerTasks"><p style="color:var(--muted)">Загрузка...</p></div>
+        </div>
+        {% endif %}
+
+        {% if is_manager %}
+        <div id="statsSection" class="card" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                <h3>Статистика</h3>
+                <div class="filters" style="margin-bottom:0">
+                    <button class="filter-btn active" onclick="setPeriod('all', this)">Всё время</button>
+                    <button class="filter-btn" onclick="setPeriod('month', this)">Месяц</button>
+                    <button class="filter-btn" onclick="setPeriod('week', this)">Неделя</button>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value target" id="targetPercent">—</div>
+                    <div class="stat-label">Целевых (от дозвонов)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value closed" id="closedPercent">—</div>
+                    <div class="stat-label">Закрыто (от целевых)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value days" id="workingDays">—</div>
+                    <div class="stat-label">Рабочих дней</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="reachedCount">—</div>
+                    <div class="stat-label">Дозвонов</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="greenCount">—</div>
+                    <div class="stat-label">Целевых</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="purpleCount">—</div>
+                    <div class="stat-label">Закрыто</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value avg" id="avgPerDay">—</div>
+                    <div class="stat-label">Звонков в день (ср.)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" id="funnelSection" style="display:none">
+            <h3 style="margin-bottom:1rem">Воронка продаж</h3>
+            <div class="funnel" id="funnelWrap"></div>
+        </div>
+
+        <div class="card" id="mainCard" style="display:none">
+            <div class="tabs">
+                <span class="tab active" onclick="showTab('calls', this)">Целевые клиенты</span>
+                <span class="tab" onclick="showTab('callback', this)">Дозвонить <span id="callbackCount" style="font-size:0.75rem"></span></span>
+                <span class="tab" onclick="showTab('team', this)">Команда</span>
+                <span class="tab" onclick="showTab('tasks', this)">Управление</span>
+                <span class="tab" onclick="showTab('dashboard', this)">Сводка</span>
+            </div>
+
+            <div id="tabCalls">
+                <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+                    <input type="text" id="searchInput" placeholder="Поиск по имени или телефону..." style="flex:1;min-width:0" oninput="renderCalls()">
+                    <button onclick="exportCSV()" class="btn-muted" style="white-space:nowrap">Скачать CSV</button>
+                </div>
+                <div class="filters" style="margin-bottom:0.5rem">
+                    <span style="color:var(--muted);font-size:0.8rem;margin-right:0.5rem">По дате:</span>
+                    <button id="dateFilterAll" class="filter-btn active" onclick="setDateFilter('all')">Все</button>
+                    <button id="dateFilterAdded" class="filter-btn" onclick="setDateFilter('added_today')">Добавленные сегодня</button>
+                    <button id="dateFilterUpdated" class="filter-btn" onclick="setDateFilter('updated_today')">Обновлённые сегодня</button>
+                </div>
+                <div id="statusFilters" class="filters"></div>
+                <div id="callsTableWrap"></div>
+            </div>
+
+            <div id="tabDashboard" style="display:none">
+                <div id="dashContent"><p class="dash-empty">Загрузка...</p></div>
+            </div>
+
+            <div id="tabCallback" style="display:none">
+                <div id="callbackTableWrap"></div>
+            </div>
+
+            <div id="tabTasks" style="display:none">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                    <span style="color:var(--muted);font-size:0.85rem">Кому какая задача и в каком статусе</span>
+                    <button onclick="loadManagerTasks()" class="btn-muted" style="padding:0.3rem 0.6rem;font-size:0.8rem">Обновить</button>
+                </div>
+                <div id="tasksTableWrap"><p style="color:var(--muted)">Загрузка...</p></div>
+            </div>
+
+            <div id="tabTeam" style="display:none">
+                <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem">
+                    <div style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">Добавить в команду</div>
+                    <div class="form-row" style="margin-bottom:0">
+                        <input type="text" id="contactName" placeholder="Имя">
+                        <select id="contactRole">
+                            <option value="sales_manager">Менеджер по продажам</option>
+                            <option value="estimator">Сметчица</option>
+                            <option value="engineer">Инженер</option>
+                            <option value="sales_head">Руководитель ОП</option>
+                            <option value="test">Тест</option>
+                        </select>
+                        <input type="text" id="contactTgId" placeholder="Telegram ID">
+                        <button onclick="addContact()" class="btn-green">Добавить</button>
+                    </div>
+                </div>
+                <div id="contactsList" class="team-grid"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if is_manager %}
+    <div id="modal" class="modal">
+        <div class="modal-content" style="max-width:440px">
+            <input type="hidden" id="modalPhone">
+            <input type="hidden" id="modalRow">
+            <input type="hidden" id="modalRowIdx">
+            <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.85rem;">
+                <span style="color:var(--muted)">Клиент:</span> <span id="modalClientInfo" style="color:var(--accent)"></span>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;border:1px solid var(--border)">
+                <div style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">🏗 Объект</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+                    <input type="text" id="modalObjAddress" placeholder="Адрес" style="grid-column:1/-1">
+                    <input type="text" id="modalObjArea" placeholder="Площадь">
+                    <input type="text" id="modalObjBudget" placeholder="Бюджет">
+                    <input type="text" id="modalObjWorkType" placeholder="Тип работ" style="grid-column:1/-1">
+                </div>
+            </div>
+            <div style="display:flex;gap:0;margin-bottom:1rem">
+                <button id="modeNote" onclick="switchModalMode('note')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.85rem">Заметка</button>
+                <button id="modeNotify" onclick="switchModalMode('notify')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.85rem">Уведомление</button>
+            </div>
+            <div class="form-row">
+                <textarea id="modalComment" rows="3" placeholder="Текст..." style="width:100%"></textarea>
+            </div>
+            <div id="notifyFields" style="display:none">
+                <div class="form-row" style="flex-direction:column;align-items:stretch">
+                    <label style="color:var(--muted);font-size:0.8rem">Кому:</label>
+                    <select id="modalRecipient" style="width:100%">
+                        <option value="">Мне (по умолчанию)</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0;margin-bottom:0.75rem">
+                    <button id="whenNow" onclick="switchWhen('now')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.8rem">Сейчас</button>
+                    <button id="whenLater" onclick="switchWhen('later')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.8rem">По времени</button>
+                </div>
+                <div id="laterFields" style="display:none">
+                    <div class="form-row" style="flex-direction:column;align-items:stretch">
+                        <label style="color:var(--muted);font-size:0.8rem">Дата и время:</label>
+                        <input type="datetime-local" id="modalReminder" style="width:100%">
+                    </div>
+                    <div class="form-row" style="align-items:center;gap:0.75rem">
+                        <label style="color:var(--muted);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem">
+                            <input type="checkbox" id="modalRepeat" onchange="toggleRepeat()"> Повторять
+                        </label>
+                    </div>
+                    <div id="repeatFields" style="display:none">
+                        <div class="form-row" style="gap:0.5rem;align-items:center">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">Каждые</label>
+                            <input type="number" id="repeatDays" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">дн. x</label>
+                            <input type="number" id="repeatCount" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">раз</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
+                <button onclick="closeModal()" class="btn-muted">Отмена</button>
+                <button id="modalSubmitBtn" onclick="submitModal()" class="btn-green">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <h3>📋 Отправить задачу</h3>
+            <input type="hidden" id="taskPhone">
+            <input type="hidden" id="taskRowIdx">
+            <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.85rem;">
+                <span style="color:var(--muted)">Клиент:</span> <span id="taskClientInfo" style="color:var(--accent)"></span>
+            </div>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">Кому:</label>
+                <select id="taskRecipient" style="width:100%">
+                    <option value="">Выберите получателя</option>
+                </select>
+            </div>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">Описание задачи:</label>
+                <textarea id="taskText" rows="3" placeholder="Что нужно сделать..." style="width:100%"></textarea>
+            </div>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">Прикрепить файл (опционально):</label>
+                <input type="file" id="taskFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="font-size:0.85rem">
+            </div>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem">
+                <button onclick="closeTaskModal()" class="btn-muted">Отмена</button>
+                <button onclick="sendTask()" class="btn-purple">Отправить в Telegram</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="timelineModal" class="modal timeline-modal">
+        <div class="modal-content">
+            <div class="timeline-header">
+                <h3>📋 История клиента <span id="tlPhone" style="color:var(--accent)"></span><span class="tl-live" title="Обновляется"></span></h3>
+            </div>
+            <div class="timeline-list" id="timelineList">
+                <p style="color:var(--muted)">Загрузка...</p>
+            </div>
+            <button onclick="closeTimeline()" class="btn-muted modal-close">Закрыть</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        const IS_MANAGER = {{ is_manager | tojson }};
+        let rowsData = [];
+        let orangeRows = [];
+        let allStats = {};
+        let activeFilter = 'all';
+        let activePeriod = 'all';
+        let activeDateFilter = 'all';
+
+        const STATUS_FILTERS = [
+            { key: 'all', label: 'Все' },
+            { key: 'first_contact', label: 'Первый контакт' },
+            { key: 'negotiation', label: 'Переговоры' },
+            { key: 'waiting', label: 'Ушли в долгое ожидание' },
+            { key: 'proposal_sent', label: 'Выслано КП' },
+            { key: 'closed', label: 'Закрыт' },
+            { key: 'rejected', label: 'Отказ' },
+        ];
+
+        const FUNNEL_STAGES = [
+            { key: 'first_contact', label: 'Первый контакт', color: 'var(--accent)' },
+            { key: 'negotiation', label: 'Переговоры', color: 'var(--orange)' },
+            { key: 'waiting', label: 'Ушли в долгое ожидание', color: '#6b9fff' },
+            { key: 'proposal_sent', label: 'Выслано КП', color: 'var(--purple)' },
+            { key: 'closed', label: 'Закрыт', color: 'var(--green)' },
+        ];
+
+        function renderFunnel() {
+            const funnelRows = rowsData.filter(r => r.status === 'green');
+            const stageRank = { first_contact: 0, negotiation: 1, waiting: 2, proposal_sent: 3, closed: 4 };
+            const counts = {};
+            counts.first_contact = funnelRows.length;
+            FUNNEL_STAGES.slice(1).forEach(s => {
+                counts[s.key] = funnelRows.filter(r => (r.local_status || 'first_contact') === s.key).length;
+            });
+            const rejectedWithProposal = funnelRows.filter(r =>
+                (r.local_status || '') === 'rejected' &&
+                (stageRank[r.max_stage || ''] ?? 0) >= 3
+            ).length;
+            counts.proposal_sent += rejectedWithProposal;
+            const wrap = document.getElementById('funnelWrap');
+            const totalQualified = counts.first_contact;
+            wrap.innerHTML = FUNNEL_STAGES.map((s, i) => {
+                const cnt = counts[s.key];
+                const conv = i > 0 && totalQualified > 0 ? Math.round(cnt / totalQualified * 100) : 0;
+                const arrow = i > 0 ? `<span class="funnel-arrow">→</span>` : '';
+                return `${arrow}<div class="funnel-step">
+                    <div class="f-count" style="color:${s.color}">${cnt}</div>
+                    <div class="f-label">${s.label}</div>
+                    ${i > 0 ? `<div class="f-conv">${conv}%</div>` : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function setPeriod(period, el) {
+            activePeriod = period;
+            document.querySelectorAll('#statsSection .filter-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            updateStats();
+        }
+
+        function isAddedToday(creationTime) {
+            if (!creationTime) return false;
+            const d = parseDate(creationTime);
+            if (!d) return false;
+            const today = new Date();
+            return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+        }
+
+        function isUpdatedToday(lastActivity) {
+            if (!lastActivity) return false;
+            const d = parseDate(lastActivity);
+            if (!d) return false;
+            const today = new Date();
+            return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+        }
+
+        function parseDate(str) {
+            if (!str) return null;
+            const parts = str.match(/(\d{2})\.(\d{2})\.(\d{2,4})/);
+            if (parts) {
+                const y = parts[3].length === 2 ? 2000 + +parts[3] : +parts[3];
+                return new Date(y, +parts[2] - 1, +parts[1]);
+            }
+            const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) return new Date(str.replace(' ', 'T'));
+            const d = new Date(str);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function formatDateShort(str) {
+            if (!str || typeof str !== 'string') return '';
+            let d;
+            const dm = str.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?/);
+            if (dm) {
+                const y = dm[3].length === 2 ? 2000 + +dm[3] : +dm[3];
+                d = new Date(y, +dm[2] - 1, +dm[1], dm[4] ? +dm[4] : 0, dm[5] ? +dm[5] : 0);
+            } else {
+                d = new Date(str.replace(' ', 'T'));
+            }
+            if (isNaN(d.getTime())) return str;
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yy = String(d.getFullYear()).slice(-2);
+            const hasTime = /\d{1,2}:\d{2}/.test(str) || /^\d{4}-\d{2}-\d{2} \d/.test(str.trim());
+            if (hasTime && (d.getHours() || d.getMinutes())) {
+                const hh = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                return `${dd}.${mm}.${yy} ${hh}:${min}`;
+            }
+            return `${dd}.${mm}.${yy}`;
+        }
+
+        function updateStats() {
+            if (activePeriod === 'all') {
+                document.getElementById('targetPercent').textContent = allStats.target_percent + '%';
+                document.getElementById('closedPercent').textContent = allStats.closed_percent + '%';
+                document.getElementById('workingDays').textContent = allStats.working_days;
+                document.getElementById('reachedCount').textContent = allStats.reached_count;
+                document.getElementById('greenCount').textContent = allStats.green_count;
+                document.getElementById('purpleCount').textContent = allStats.purple_count;
+                document.getElementById('avgPerDay').textContent = allStats.avg_per_day;
+                return;
+            }
+            const now = new Date();
+            const cutoff = new Date();
+            if (activePeriod === 'week') cutoff.setDate(now.getDate() - 7);
+            else cutoff.setDate(now.getDate() - 30);
+
+            let red = 0, green = 0, orange = 0, purple = 0, total = 0;
+            rowsData.forEach(r => {
+                const d = parseDate(r.creation_time);
+                if (d && d >= cutoff) {
+                    total++;
+                    if (r.status === 'red') red++;
+                    else if (r.status === 'green') green++;
+                    else if (r.status === 'orange') orange++;
+                    else if (r.status === 'purple') purple++;
+                }
+            });
+            const reached = red + green + purple;
+            const tp = reached > 0 ? Math.round(green / reached * 100 * 10) / 10 : 0;
+            const cp = green > 0 ? Math.round(purple / green * 100 * 10) / 10 : 0;
+            document.getElementById('targetPercent').textContent = tp + '%';
+            document.getElementById('closedPercent').textContent = cp + '%';
+            document.getElementById('workingDays').textContent = '—';
+            document.getElementById('reachedCount').textContent = reached;
+            document.getElementById('greenCount').textContent = green;
+            document.getElementById('purpleCount').textContent = purple;
+            document.getElementById('avgPerDay').textContent = '—';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loadingMsg').style.display = 'none';
+            if (IS_MANAGER) {
+                document.getElementById('mainCard').style.display = 'block';
+                loadData();
+            } else {
+                document.getElementById('workerCard').style.display = 'block';
+                loadMyTasks();
+            }
+        });
+
+        async function loadDashboard() {
+            const wrap = document.getElementById('dashContent');
+            wrap.innerHTML = '<p class="dash-empty">Загрузка...</p>';
+            try {
+                const r = await fetch('/api/dashboard');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                renderDashboard(d);
+            } catch (e) {
+                wrap.innerHTML = `<p class="error">${e.message}</p>`;
+            }
+        }
+
+        function renderDashboard(d) {
+            const wrap = document.getElementById('dashContent');
+            const overdueHtml = d.overdue.length
+                ? d.overdue.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${r.phone}</div>
+                        <div class="dash-item-name">${r.client_name || ''}</div>
+                    </div>
+                    <div class="dash-item-meta" style="color:var(--red)">${(r.at || '').slice(0, 16)}</div>
+                    <div class="dash-item-action">
+                        <button onclick="dashSendNow('${r.phone}', ${r.sheet_row}, '${(r.text||'').replace(/'/g,"\\'")}', '${r.recipient||''}')" class="btn-red" style="padding:0.2rem 0.5rem;font-size:0.8rem">Отправить</button>
+                    </div>
+                </div>`).join('')
+                : '<p class="dash-empty">Нет просроченных</p>';
+
+            const todayHtml = d.today_reminders.length
+                ? d.today_reminders.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${r.phone}</div>
+                        <div class="dash-item-name">${r.client_name || ''} — ${r.text || ''}</div>
+                    </div>
+                    <div class="dash-item-meta">${(r.at || '').slice(11, 16)}</div>
+                </div>`).join('')
+                : '<p class="dash-empty">Нет напоминаний на сегодня</p>';
+
+            const orangeHtml = d.orange.length
+                ? d.orange.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${r.phone}</div>
+                        <div class="dash-item-name">${r.creation_time || ''}</div>
+                    </div>
+                    <div class="dash-item-action">
+                        <a href="tel:${r.phone}" class="btn-green" style="padding:0.2rem 0.5rem;font-size:0.8rem;text-decoration:none">📞</a>
+                    </div>
+                </div>`).join('')
+                : '<p class="dash-empty">Все дозвонились</p>';
+
+            const inactiveHtml = d.inactive.length
+                ? d.inactive.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${r.phone}</div>
+                        <div class="dash-item-name">${r.name || ''}</div>
+                    </div>
+                    <div class="dash-item-meta">${r.days_silent ? r.days_silent + ' дн.' : '—'}</div>
+                    <div class="dash-item-action">
+                        <button onclick="openTimeline('${r.phone}')" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem">История</button>
+                    </div>
+                </div>`).join('')
+                : '<p class="dash-empty">Все клиенты активны</p>';
+
+            const s = d.summary || {};
+            const total = Object.values(s).reduce((a, b) => a + b, 0);
+
+            wrap.innerHTML = `
+                <div class="dash-grid">
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>🔴 Просрочено</h4>
+                            <span class="dash-card-count" style="background:var(--red)">${d.overdue.length}</span>
+                        </div>
+                        <div class="dash-card-body">${overdueHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>⏰ Напоминания сегодня</h4>
+                            <span class="dash-card-count" style="background:var(--orange)">${d.today_reminders.length}</span>
+                        </div>
+                        <div class="dash-card-body">${todayHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>📞 Дозвонить</h4>
+                            <span class="dash-card-count" style="background:var(--accent)">${d.orange.length}</span>
+                        </div>
+                        <div class="dash-card-body">${orangeHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>😴 Без активности 3+ дня</h4>
+                            <span class="dash-card-count" style="background:var(--muted)">${d.inactive.length}</span>
+                        </div>
+                        <div class="dash-card-body">${inactiveHtml}</div>
+                    </div>
+                </div>
+                <div class="dash-summary">
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--text)">${total}</div>
+                        <div class="dash-summary-label">Всего клиентов</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--accent)">${s.first_contact || 0}</div>
+                        <div class="dash-summary-label">Первый контакт</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--orange)">${s.negotiation || 0}</div>
+                        <div class="dash-summary-label">Переговоры</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:#6b9fff">${s.waiting || 0}</div>
+                        <div class="dash-summary-label">Ушли в долгое ожидание</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--purple)">${s.proposal_sent || 0}</div>
+                        <div class="dash-summary-label">Выслано КП</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--green)">${s.closed || 0}</div>
+                        <div class="dash-summary-label">Закрыто</div>
+                    </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--red)">${s.rejected || 0}</div>
+                        <div class="dash-summary-label">Отказ</div>
+                    </div>
+                </div>
+                <div style="margin-top:1rem">
+                    <button onclick="sendWeeklyReport()" class="btn-purple" style="padding:0.4rem 0.8rem;font-size:0.85rem">Получить отчёт за неделю (на проверку)</button>
+                </div>
+            `;
+        }
+
+        async function sendWeeklyReport() {
+            try {
+                const r = await fetch('/api/weekly-report', { method: 'POST' });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || d.error || 'Ошибка');
+                alert('Отчёт отправлен вам в Telegram. Проверьте и перешлите РОП.');
+            } catch (e) { alert(e.message); }
+        }
+
+        async function dashSendNow(phone, sheetRow, text, recipient) {
+            try {
+                const r = await fetch('/api/send-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, text, sheet_row: sheetRow || null, recipient_telegram_id: recipient || null })
+                });
+                const d = await r.json();
+                alert(d.ok ? 'Отправлено' : 'Ошибка отправки');
+                loadDashboard();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function loadData() {
+            try {
+                const r = await fetch('/api/data');
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'Ошибка');
+                rowsData = data.rows;
+                orangeRows = data.orange_rows || [];
+                allStats = data.stats;
+                dataLoaded = true;
+                document.getElementById('callbackCount').textContent = orangeRows.length ? `(${orangeRows.length})` : '';
+                document.getElementById('statsSection').style.display = 'block';
+                document.getElementById('funnelSection').style.display = 'block';
+                updateStats();
+                renderFunnel();
+                renderCalls();
+            } catch (e) {
+                const el = document.getElementById('errorMsg');
+                el.textContent = e.message;
+                el.style.display = 'block';
+            }
+        }
+
+        function renderFilters() {
+            const addedCount = rowsData.filter(r => isAddedToday(r.creation_time)).length;
+            const updatedCount = rowsData.filter(r => isUpdatedToday(r.last_activity)).length;
+            const addedBtn = document.getElementById('dateFilterAdded');
+            const updatedBtn = document.getElementById('dateFilterUpdated');
+            if (addedBtn) addedBtn.innerHTML = `Добавленные сегодня<span class="count">(${addedCount})</span>`;
+            if (updatedBtn) updatedBtn.innerHTML = `Обновлённые сегодня<span class="count">(${updatedCount})</span>`;
+
+            const filtersWrap = document.getElementById('statusFilters');
+            const counts = {};
+            STATUS_FILTERS.forEach(f => { counts[f.key] = 0; });
+            rowsData.forEach(r => {
+                const s = r.local_status || 'first_contact';
+                if (counts[s] !== undefined) counts[s]++;
+            });
+            counts['all'] = rowsData.length;
+
+            filtersWrap.innerHTML = STATUS_FILTERS.map(f => {
+                const isActive = activeFilter === f.key ? 'active' : '';
+                const cnt = f.key === 'all' ? rowsData.length : counts[f.key];
+                return `<button class="filter-btn ${isActive}" onclick="setFilter('${f.key}')">${f.label}<span class="count">(${cnt})</span></button>`;
+            }).join('');
+        }
+
+        function setFilter(key) {
+            activeFilter = key;
+            renderFilters();
+            renderCalls();
+        }
+
+        function setDateFilter(key) {
+            activeDateFilter = key;
+            document.getElementById('dateFilterAll')?.classList.toggle('active', key === 'all');
+            document.getElementById('dateFilterAdded')?.classList.toggle('active', key === 'added_today');
+            document.getElementById('dateFilterUpdated')?.classList.toggle('active', key === 'updated_today');
+            renderCalls();
+        }
+
+        function getFilteredRows() {
+            let rows = activeFilter === 'all' ? rowsData : rowsData.filter(r => (r.local_status || 'first_contact') === activeFilter);
+            if (activeDateFilter === 'added_today') rows = rows.filter(r => isAddedToday(r.creation_time));
+            if (activeDateFilter === 'updated_today') rows = rows.filter(r => isUpdatedToday(r.last_activity));
+            const q = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+            if (q) rows = rows.filter(r => r.phone.toLowerCase().includes(q) || (r.econom_number || '').toLowerCase().includes(q));
+            return rows;
+        }
+
+        function renderCalls() {
+            renderFilters();
+            const wrap = document.getElementById('callsTableWrap');
+            const filtered = getFilteredRows();
+            if (!filtered.length) {
+                const label = STATUS_FILTERS.find(f => f.key === activeFilter)?.label || activeFilter;
+                wrap.innerHTML = `<p style="color:var(--muted)">Нет клиентов в категории "${label}"</p>`;
+                return;
+            }
+            wrap.innerHTML = `
+                <table class="calls-table">
+                    <thead>
+                        <tr>
+                            <th>Телефон</th>
+                            <th>Имя</th>
+                            <th>Добавлен</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                            <th>Обновлено</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filtered.map(r => {
+                            const origIdx = rowsData.indexOf(r);
+                            return `
+                            <tr class="row-green">
+                                <td>${r.phone}</td>
+                                <td><input type="text" class="econom-input" placeholder="" value="${(r.econom_number || '').replace(/"/g, '&quot;')}" data-phone="${r.phone}" data-row="${r.row_index}" onchange="saveEconom(this)"></td>
+                                <td class="date-cell">${formatDateShort(r.creation_time) || '—'}</td>
+                                <td>
+                                    <select class="status-select" data-phone="${r.phone}" data-row="${r.row_index}" onchange="saveLocalStatus(this)">
+                                        <option value="first_contact" ${r.local_status==='first_contact'?'selected':''}>Установлен первый контакт</option>
+                                        <option value="negotiation" ${r.local_status==='negotiation'?'selected':''}>Переговоры</option>
+                                        <option value="waiting" ${r.local_status==='waiting'?'selected':''}>Ушли в долгое ожидание</option>
+                                        <option value="proposal_sent" ${r.local_status==='proposal_sent'?'selected':''}>Выслано КП</option>
+                                        <option value="closed" ${r.local_status==='closed'?'selected':''}>Закрыт</option>
+                                        <option value="rejected" ${r.local_status==='rejected'?'selected':''}>Отказ</option>
+                                    </select>
+                                </td>
+                                <td class="actions-cell">
+                                    <button onclick="openModal('${r.phone}', ${r.row_index})" class="btn-green">Коммент</button>
+                                    <button onclick="openTaskModal(${origIdx})" class="btn-purple">Задача</button>
+                                    <button onclick="openTimeline('${r.phone}')" class="btn-primary">История</button>
+                                </td>
+                                <td class="date-cell">${formatDateShort(r.last_activity) || '—'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        let dataLoaded = false;
+
+        function showTab(tab, el) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('tabDashboard').style.display = tab === 'dashboard' ? 'block' : 'none';
+            document.getElementById('tabCalls').style.display = tab === 'calls' ? 'block' : 'none';
+            document.getElementById('tabCallback').style.display = tab === 'callback' ? 'block' : 'none';
+            document.getElementById('tabTasks').style.display = tab === 'tasks' ? 'block' : 'none';
+            document.getElementById('tabTeam').style.display = tab === 'team' ? 'block' : 'none';
+            if (tab === 'dashboard') loadDashboard();
+            if (tab === 'calls' && !dataLoaded) { loadData(); }
+            if (tab === 'calls' && dataLoaded) { renderCalls(); }
+            if (tab === 'team') loadContacts();
+            if (tab === 'tasks') loadManagerTasks();
+            if (tab === 'callback' && dataLoaded) renderCallback();
+            if (tab === 'callback' && !dataLoaded) { loadData().then(() => renderCallback()); }
+        }
+
+        let _modalMode = 'note';
+        let _modalWhen = 'now';
+
+        async function openModal(phone, row, idx) {
+            document.getElementById('modalPhone').value = phone;
+            document.getElementById('modalRow').value = row || '';
+            document.getElementById('modalRowIdx').value = idx ?? '';
+            document.getElementById('modalComment').value = '';
+            document.getElementById('modalReminder').value = '';
+            document.getElementById('modalRepeat').checked = false;
+            toggleRepeat();
+            const item = rowsData.find(r => r.phone === phone && r.row_index === row);
+            const name = item?.econom_number || '';
+            document.getElementById('modalClientInfo').textContent = `${phone}${name ? ' / ' + name : ''}`;
+            document.getElementById('modalObjAddress').value = item?.object_address || '';
+            document.getElementById('modalObjArea').value = item?.object_area || '';
+            document.getElementById('modalObjBudget').value = item?.object_budget || '';
+            document.getElementById('modalObjWorkType').value = item?.object_work_type || '';
+            const sel = document.getElementById('modalRecipient');
+            sel.innerHTML = '<option value="">Мне (по умолчанию)</option>';
+            try {
+                const r = await fetch('/api/contacts');
+                const d = await r.json();
+                (d.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        sel.innerHTML += `<option value="${c.telegram_id}">${c.name} (${roleLabels[c.role] || c.role})</option>`;
+                    }
+                });
+            } catch(e) {}
+            switchModalMode('note');
+            switchWhen('now');
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+        function switchModalMode(mode) {
+            _modalMode = mode;
+            document.getElementById('modeNote').style.background = mode === 'note' ? '#fff' : 'var(--bg)';
+            document.getElementById('modeNote').style.color = mode === 'note' ? '#000' : 'var(--muted)';
+            document.getElementById('modeNotify').style.background = mode === 'notify' ? '#fff' : 'var(--bg)';
+            document.getElementById('modeNotify').style.color = mode === 'notify' ? '#000' : 'var(--muted)';
+            document.getElementById('notifyFields').style.display = mode === 'notify' ? 'block' : 'none';
+            const btn = document.getElementById('modalSubmitBtn');
+            if (mode === 'note') {
+                btn.textContent = 'Сохранить';
+                btn.className = 'btn-green';
+            } else {
+                btn.textContent = 'Отправить';
+                btn.className = 'btn-purple';
+            }
+        }
+
+        function switchWhen(when) {
+            _modalWhen = when;
+            document.getElementById('whenNow').style.background = when === 'now' ? '#fff' : 'var(--bg)';
+            document.getElementById('whenNow').style.color = when === 'now' ? '#000' : 'var(--muted)';
+            document.getElementById('whenLater').style.background = when === 'later' ? '#fff' : 'var(--bg)';
+            document.getElementById('whenLater').style.color = when === 'later' ? '#000' : 'var(--muted)';
+            document.getElementById('laterFields').style.display = when === 'later' ? 'block' : 'none';
+        }
+
+        function toggleRepeat() {
+            document.getElementById('repeatFields').style.display = document.getElementById('modalRepeat').checked ? 'block' : 'none';
+        }
+
+        async function openTaskModal(idx) {
+            const r = rowsData[idx];
+            document.getElementById('taskPhone').value = r.phone;
+            document.getElementById('taskRowIdx').value = idx;
+            const name = r.econom_number || '—';
+            document.getElementById('taskClientInfo').textContent = `${r.phone}${name !== '—' ? ' / ' + name : ''}`;
+            document.getElementById('taskText').value = '';
+            const sel = document.getElementById('taskRecipient');
+            sel.innerHTML = '<option value="">Выберите получателя</option>';
+            try {
+                const resp = await fetch('/api/contacts');
+                const d = await resp.json();
+                (d.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        sel.innerHTML += `<option value="${c.telegram_id}" data-role="${c.role}">${c.name} — ${roleLabels[c.role] || c.role}</option>`;
+                    }
+                });
+            } catch(e) {}
+            document.getElementById('taskModal').classList.add('show');
+        }
+        function closeTaskModal() {
+            document.getElementById('taskModal').classList.remove('show');
+            const fi = document.getElementById('taskFile');
+            if (fi) fi.value = '';
+        }
+
+        async function sendTask() {
+            const phone = document.getElementById('taskPhone').value;
+            const task = document.getElementById('taskText').value;
+            const sel = document.getElementById('taskRecipient');
+            const tgId = sel.value;
+            const selectedOption = sel.options[sel.selectedIndex];
+            const role = selectedOption?.dataset?.role || 'sales_manager';
+            if (!tgId) { alert('Выберите получателя'); return; }
+            if (!task.trim()) { alert('Укажите задачу'); return; }
+            const idx = +document.getElementById('taskRowIdx').value;
+            const r = rowsData[idx];
+            const name = r?.econom_number || '';
+            const objectInfo = `Контакт: ${phone}${name ? '\nИмя: ' + name : ''}`;
+            const fileInput = document.getElementById('taskFile');
+            const formData = new FormData();
+            formData.append('phone', phone);
+            formData.append('object_info', objectInfo);
+            formData.append('task', task.trim());
+            formData.append('role', role);
+            formData.append('recipient_telegram_id', tgId);
+            if (fileInput?.files?.length) {
+                formData.append('file', fileInput.files[0]);
+            }
+            try {
+                const resp = await fetch('/api/task', {
+                    method: 'POST',
+                    body: formData
+                });
+                const d = await resp.json();
+                if (!resp.ok) throw new Error(d.detail || 'Ошибка');
+                if (!d.ok) {
+                    const msg = d.error || 'Не удалось отправить. Попросите инженера написать боту /start.';
+                    throw new Error(msg);
+                }
+                alert('Задача отправлена');
+                closeTaskModal();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function saveLocalStatus(el) {
+            const phone = el.dataset.phone;
+            const row = +el.dataset.row;
+            const status = el.value;
+            await fetch('/api/local-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, sheet_row: row, local_status: status })
+            });
+            const item = rowsData.find(r => r.phone === phone && r.row_index === row);
+            if (item) item.local_status = status;
+            renderFunnel();
+            renderCalls();
+        }
+
+        async function saveEconom(el) {
+            const phone = el.dataset.phone;
+            const row = +el.dataset.row;
+            const val = el.value.trim();
+            await fetch('/api/econom-number', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, sheet_row: row, econom_number: val })
+            });
+        }
+
+        async function saveModalObjectInfo(phone, sheetRow) {
+            if (!sheetRow) return;
+            const data = {
+                phone, sheet_row: sheetRow,
+                address: document.getElementById('modalObjAddress').value.trim(),
+                area: document.getElementById('modalObjArea').value.trim(),
+                budget: document.getElementById('modalObjBudget').value.trim(),
+                work_type: document.getElementById('modalObjWorkType').value.trim(),
+            };
+            await fetch('/api/object-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const item = rowsData.find(r => r.phone === phone && r.row_index === sheetRow);
+            if (item) {
+                item.object_address = data.address;
+                item.object_area = data.area;
+                item.object_budget = data.budget;
+                item.object_work_type = data.work_type;
+            }
+        }
+
+        async function submitModal() {
+            const phone = document.getElementById('modalPhone').value;
+            const text = document.getElementById('modalComment').value;
+            const row = document.getElementById('modalRow').value;
+            const sheetRow = (row !== '' && row != null) ? +row : null;
+            const hasObject = document.getElementById('modalObjAddress').value.trim() ||
+                document.getElementById('modalObjArea').value.trim() ||
+                document.getElementById('modalObjBudget').value.trim() ||
+                document.getElementById('modalObjWorkType').value.trim();
+
+            if (!text.trim() && !hasObject) { alert('Введите текст или данные объекта'); return; }
+
+            if (_modalMode === 'note') {
+                if (text.trim()) {
+                    await fetch('/api/comment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, comment: text.trim(), sheet_row: sheetRow })
+                    });
+                    alert('Заметка сохранена');
+                }
+                await saveModalObjectInfo(phone, sheetRow);
+                if (!text.trim() && hasObject) alert('Данные объекта сохранены');
+                closeModal();
+                return;
+            }
+
+            if (!text.trim()) { alert('Для уведомления нужен текст'); return; }
+            const recipient = document.getElementById('modalRecipient').value || null;
+
+            if (_modalWhen === 'now') {
+                const r = await fetch('/api/send-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, text: text.trim(), sheet_row: sheetRow, recipient_telegram_id: recipient })
+                });
+                const d = await r.json();
+                alert(d.ok ? 'Отправлено' : 'Ошибка отправки');
+                await saveModalObjectInfo(phone, sheetRow);
+                closeModal();
+                return;
+            }
+
+            const at = document.getElementById('modalReminder').value;
+            if (!at) { alert('Укажите дату и время'); return; }
+
+            const repeat = document.getElementById('modalRepeat').checked;
+            if (repeat) {
+                const interval = +(document.getElementById('repeatDays').value || 3);
+                const count = +(document.getElementById('repeatCount').value || 3);
+                const base = new Date(at);
+                for (let i = 0; i < count; i++) {
+                    const dt = new Date(base.getTime() + i * interval * 86400000);
+                    const ts = dt.toISOString().slice(0, 16).replace('T', ' ');
+                    await fetch('/api/reminder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, text: `[${i + 1}/${count}] ${text.trim()}`, reminder_at: ts, sheet_row: sheetRow, recipient_telegram_id: recipient })
+                    });
+                }
+                alert(`Запланировано ${count} уведомлений с интервалом ${interval} дн.`);
+            } else {
+                await fetch('/api/reminder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, text: text.trim(), reminder_at: at.replace('T', ' '), sheet_row: sheetRow, recipient_telegram_id: recipient })
+                });
+                alert('Напоминание запланировано');
+            }
+            await saveModalObjectInfo(phone, sheetRow);
+            closeModal();
+        }
+
+        async function addContact() {
+            const name = document.getElementById('contactName').value.trim();
+            const role = document.getElementById('contactRole').value;
+            const tg = document.getElementById('contactTgId').value.trim() || null;
+            if (!name) { alert('Введите имя'); return; }
+            const r = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, role, telegram_id: tg })
+            });
+            if (!r.ok) {
+                const d = await r.json();
+                alert('Ошибка: ' + (d.detail || 'Неизвестная ошибка'));
+                return;
+            }
+            document.getElementById('contactName').value = '';
+            document.getElementById('contactTgId').value = '';
+            loadContacts();
+        }
+
+        async function deleteContact(id) {
+            if (!confirm('Удалить контакт?')) return;
+            await fetch('/api/contact/' + id, { method: 'DELETE' });
+            loadContacts();
+        }
+
+        const roleLabels = { sales_manager: 'Менеджер по продажам', estimator: 'Сметчица', engineer: 'Инженер', sales_head: 'Руководитель ОП', test: 'Тест' };
+        const statusLabelsRu = { first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание', proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ' };
+
+        function exportCSV() {
+            const BOM = '\uFEFF';
+            const header = 'Строка;Телефон;Имя;Статус\n';
+            const lines = rowsData.map(r =>
+                `${r.row_index};${r.phone};${(r.econom_number||'').replace(/;/g,',')};${statusLabelsRu[r.local_status]||r.local_status}`
+            ).join('\n');
+            const blob = new Blob([BOM + header + lines], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `integra_clients_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        let _tlInterval = null;
+        const EVENT_ICONS = {
+            comment: '💬', status_change: '🔄', name_change: '✏️',
+            reminder_created: '⏰', reminder_sent: '📨',
+            message_sent: '📤', task_sent: '📋',
+            task_status: '🔄', worker_comment: '💬',
+            worker_reply: '💬', object_update: '🏠'
+        };
+        const EVENT_LABELS = {
+            comment: 'Комментарий', status_change: 'Статус', name_change: 'Имя',
+            reminder_created: 'Напоминание', reminder_sent: 'Отправлено',
+            message_sent: 'Сообщение', task_sent: 'Задача',
+            task_status: 'Статус задачи', worker_comment: 'Комментарий сотрудника',
+            worker_reply: 'Ответ сотрудника', object_update: 'Объект'
+        };
+
+        let _tlPhone = '';
+        function openTimeline(phone) {
+            _tlPhone = phone;
+            document.getElementById('tlPhone').textContent = phone;
+            document.getElementById('timelineModal').classList.add('show');
+            loadTimeline(phone);
+            if (_tlInterval) clearInterval(_tlInterval);
+            _tlInterval = setInterval(() => loadTimeline(phone), 5000);
+        }
+
+        function closeTimeline() {
+            document.getElementById('timelineModal').classList.remove('show');
+            if (_tlInterval) { clearInterval(_tlInterval); _tlInterval = null; }
+        }
+
+        async function deleteEvent(eventId) {
+            if (!confirm('Удалить эту запись из истории?')) return;
+            try {
+                const r = await fetch('/api/events/id/' + eventId, { method: 'DELETE' });
+                if (!r.ok) throw new Error('Ошибка удаления');
+                if (_tlPhone) loadTimeline(_tlPhone);
+                loadData();
+            } catch (ex) {
+                alert('Не удалось удалить: ' + (ex.message || ex));
+            }
+        }
+
+        async function loadTimeline(phone) {
+            try {
+                const r = await fetch('/api/events/' + encodeURIComponent(phone));
+                const d = await r.json();
+                const list = document.getElementById('timelineList');
+                if (!(d.events || []).length) {
+                    list.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет событий</p>';
+                    return;
+                }
+                list.innerHTML = d.events.map(e => {
+                    const dt = e.created_at ? new Date(e.created_at.replace(' ', 'T')) : null;
+                    const timeStr = dt ? dt.toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+                    return `<div class="timeline-item" data-event-id="${e.id}">
+                        <div class="tl-top">
+                            <span class="tl-icon">${EVENT_ICONS[e.type] || '📌'}</span>
+                            <span class="tl-type">${EVENT_LABELS[e.type] || e.type}</span>
+                            <span class="tl-time">${timeStr}</span>
+                            <button class="tl-del" onclick="deleteEvent(${e.id})" title="Удалить запись">✕</button>
+                        </div>
+                        <div class="tl-desc">${e.description}</div>
+                    </div>`;
+                }).join('');
+            } catch (ex) {
+                document.getElementById('timelineList').innerHTML = '<p class="error">Ошибка загрузки</p>';
+            }
+        }
+
+        function renderCallback() {
+            const wrap = document.getElementById('callbackTableWrap');
+            if (!orangeRows.length) {
+                wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет контактов для дозвона</p>';
+                return;
+            }
+            wrap.innerHTML = `<table><thead><tr>
+                <th>№</th><th>Телефон</th><th>Дата</th><th>Действие</th>
+            </tr></thead><tbody>${orangeRows.map((r, i) => `<tr>
+                <td>${i + 1}</td>
+                <td>${r.phone}</td>
+                <td>${r.creation_time || '—'}</td>
+                <td><a href="tel:${r.phone}" class="btn-green" style="padding:0.25rem 0.75rem;font-size:0.85rem;text-decoration:none">📞 Позвонить</a></td>
+            </tr>`).join('')}</tbody></table>`;
+        }
+
+        async function loadContacts() {
+            const r = await fetch('/api/contacts');
+            const d = await r.json();
+            const list = document.getElementById('contactsList');
+            if (!(d.contacts || []).length) {
+                list.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет контактов</p>';
+                return;
+            }
+            list.innerHTML = (d.contacts || []).map(c => `
+                <div class="team-card">
+                    <button class="tc-del" onclick="deleteContact(${c.id})" title="Удалить">✕</button>
+                    <div class="tc-name">${c.name}</div>
+                    <span class="tc-role tc-role-${c.role}">${roleLabels[c.role] || c.role}</span>
+                    <div class="tc-tg">📱 ${c.telegram_id || '—'}</div>
+                </div>
+            `).join('');
+        }
+
+        const clientStatusLabels = {
+            first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание',
+            proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ',
+        };
+        const taskStatusLabels = { new: 'Новая', in_progress: 'В работе', done: 'Готово' };
+        const taskStatusColors = { new: 'var(--accent)', in_progress: 'var(--orange)', done: 'var(--green)' };
+
+        async function loadManagerTasks() {
+            const wrap = document.getElementById('tasksTableWrap');
+            try {
+                const r = await fetch('/api/all-tasks');
+                if (r.status === 401) { location.href = '/login'; return; }
+                if (r.status === 403) { wrap.innerHTML = '<p style="color:var(--muted)">Доступ только для менеджера</p>'; return; }
+                const d = await r.json();
+                const tasks = d.tasks || [];
+                if (!tasks.length) {
+                    wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет задач</p>';
+                    return;
+                }
+                wrap.innerHTML = `<table class="tasks-table">
+                    <thead><tr>
+                        <th>Кому</th>
+                        <th>Клиент</th>
+                        <th>Задача</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                        <th>Действия</th>
+                    </tr></thead>
+                    <tbody>${tasks.map(t => {
+                        const roleLabel = roleLabels[t.role] || t.role;
+                        const client = t.phone + (t.client_name ? ' / ' + t.client_name : '');
+                        const stColor = taskStatusColors[t.status] || 'var(--muted)';
+                        const date = t.created_at ? formatDateShort(t.created_at.replace('T', ' ')) : '—';
+                        const taskText = (t.task_text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                        const taskShort = taskText.length > 80 ? taskText.slice(0, 80) + '…' : taskText;
+                        const taskCell = taskText.length > 80
+                            ? `<span class="task-short">${taskShort}</span><span class="task-full" style="display:none">${taskText}</span>
+                               <a href="#" onclick="toggleTaskExpand(this);return false" class="task-cell-expand">развернуть</a>`
+                            : taskText;
+                        const statusSelect = `<select onchange="managerSetTaskStatus(${t.id}, this.value)" style="font-size:0.75rem;padding:0.2rem;background:#111;border:1px solid #333;color:${stColor}">
+                            <option value="new" ${t.status==='new'?'selected':''}>Новая</option>
+                            <option value="in_progress" ${t.status==='in_progress'?'selected':''}>В работе</option>
+                            <option value="done" ${t.status==='done'?'selected':''}>Готово</option>
+                        </select>`;
+                        return `<tr><td>${t.recipient_name}<br><span style="color:var(--muted);font-size:0.7rem">${roleLabel}</span></td>
+                            <td>${client}<a href="#" onclick="openTimeline('${t.phone}');return false" class="task-client-link" title="Карточка клиента">📋</a></td>
+                            <td class="task-cell" style="max-width:220px;min-width:180px">${taskCell}</td>
+                            <td>${statusSelect}</td>
+                            <td class="date-cell">${date}</td>
+                            <td style="padding-left:2rem"><button onclick="managerDeleteTask(${t.id})" class="btn-red tasks-del-btn" title="Удалить">✕</button></td></tr>`;
+                    }).join('')}</tbody></table>`;
+            } catch (e) {
+                wrap.innerHTML = `<p style="color:var(--red)">${e.message || 'Ошибка загрузки'}</p>`;
+            }
+        }
+
+        function toggleTaskExpand(el) {
+            const cell = el.closest('.task-cell');
+            const short = cell.querySelector('.task-short');
+            const full = cell.querySelector('.task-full');
+            if (!short || !full) return;
+            const isExpanded = full.style.display !== 'none';
+            if (isExpanded) {
+                full.style.display = 'none';
+                short.style.display = 'inline';
+                el.textContent = 'развернуть';
+            } else {
+                short.style.display = 'none';
+                full.style.display = 'block';
+                el.textContent = 'свернуть';
+            }
+        }
+
+        async function managerSetTaskStatus(taskId, status) {
+            try {
+                const r = await fetch('/api/task-status', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ task_id: taskId, status })
+                });
+                if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
+                loadManagerTasks();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function managerDeleteTask(taskId) {
+            if (!confirm('Удалить эту задачу?')) return;
+            try {
+                const r = await fetch('/api/task/' + taskId, { method: 'DELETE' });
+                if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
+                loadManagerTasks();
+            } catch (e) { alert(e.message); }
+        }
+
+        let allWorkerTasks = [];
+        let workerFilter = 'all';
+
+        function filterWorkerTasks(filter, el) {
+            workerFilter = filter;
+            document.querySelectorAll('#workerCard .filter-btn').forEach(b => b.classList.remove('active'));
+            if (el) el.classList.add('active');
+            renderWorkerTasks();
+        }
+
+        function renderWorkerTasks() {
+            const wrap = document.getElementById('workerTasks');
+            const tasks = workerFilter === 'all' ? allWorkerTasks : allWorkerTasks.filter(t => t.status === workerFilter);
+            if (!tasks.length) {
+                wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Задач нет</p>';
+                return;
+            }
+            wrap.innerHTML = tasks.map(t => {
+                const date = t.created_at ? t.created_at.replace('T', ' ').slice(0, 16) : '';
+                const stColor = taskStatusColors[t.status] || 'var(--muted)';
+                const stLabel = taskStatusLabels[t.status] || t.status;
+                const history = (t.history || []).slice(0, 5).map(h =>
+                    `<div style="font-size:0.73rem;color:var(--muted);padding:0.3rem 0;border-top:1px solid var(--border)">
+                        <span style="opacity:0.6">${(h.created_at||'').slice(5,16).replace('T',' ')}</span> ${h.description}
+                    </div>`
+                ).join('');
+                return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:0.75rem">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                        <span style="color:var(--accent);font-size:0.85rem">${t.phone}${t.client_name ? ' / ' + t.client_name : ''}</span>
+                        <span style="color:${stColor};font-size:0.7rem;border:1px solid ${stColor};padding:0.1rem 0.4rem;border-radius:3px">${stLabel}</span>
+                    </div>
+                    <div style="font-size:0.85rem;line-height:1.5;margin-bottom:0.75rem">${t.task_text}</div>
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.5rem">
+                        ${t.status !== 'in_progress' ? `<button onclick="setTaskStatus(${t.id},'in_progress')" class="btn-orange" style="padding:0.2rem 0.6rem;font-size:0.75rem">В работе</button>` : ''}
+                        ${t.status !== 'done' ? `<button onclick="setTaskStatus(${t.id},'done')" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Готово</button>` : ''}
+                        <button onclick="toggleTaskComment(${t.id})" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">Комментарий</button>
+                        <button onclick="toggleTaskHistory(${t.id})" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.75rem">История</button>
+                    </div>
+                    <div id="taskComment_${t.id}" style="display:none;margin-top:0.5rem">
+                        <div style="display:flex;gap:0.4rem">
+                            <input type="text" id="taskCommentText_${t.id}" placeholder="Написать комментарий..." style="flex:1;font-size:0.8rem">
+                            <button onclick="sendTaskComment(${t.id})" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Отправить</button>
+                        </div>
+                    </div>
+                    <div id="taskHistory_${t.id}" style="display:none;margin-top:0.5rem;max-height:200px;overflow-y:auto">
+                        ${history || '<p style="color:var(--muted);font-size:0.75rem">Нет истории</p>'}
+                    </div>
+                    <div style="margin-top:0.25rem;text-align:right"><span style="color:var(--muted);font-size:0.65rem">${date}</span></div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadMyTasks() {
+            const wrap = document.getElementById('workerTasks');
+            try {
+                const r = await fetch('/api/my-tasks');
+                if (r.status === 401) { location.href = '/login'; return; }
+                const d = await r.json();
+                allWorkerTasks = d.tasks || [];
+                renderWorkerTasks();
+            } catch (e) {
+                wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+            }
+        }
+
+        function toggleTaskComment(id) {
+            const el = document.getElementById('taskComment_' + id);
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+        function toggleTaskHistory(id) {
+            const el = document.getElementById('taskHistory_' + id);
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function setTaskStatus(taskId, status) {
+            try {
+                const r = await fetch('/api/task-status', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ task_id: taskId, status })
+                });
+                if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
+                loadMyTasks();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function sendTaskComment(taskId) {
+            const input = document.getElementById('taskCommentText_' + taskId);
+            const text = (input?.value || '').trim();
+            if (!text) { alert('Введите комментарий'); return; }
+            try {
+                const r = await fetch('/api/task-comment', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ task_id: taskId, comment: text })
+                });
+                if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
+                input.value = '';
+                alert('Комментарий отправлен');
+                loadMyTasks();
+            } catch (e) { alert(e.message); }
+        }
+    </script>
+</body>
+</html>
