@@ -1,7 +1,33 @@
+# Секреты и конфиги (не коммитить!)
 .env
+.env.local
+.env.*.local
 credentials/
+
+# БД
 *.db
+*.sqlite
+*.sqlite3
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
 .venv/
 venv/
+env/
+*.egg-info/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Логи и временные файлы
+*.log
+.DS_Store
+Thumbs.db
