@@ -1,8 +1,9 @@
 """Telegram-бот на aiogram — хендлеры команд и ответов."""
 import html
+import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ErrorEvent
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, APP_BASE_URL, LOGIN_LINK_URL
 from database import (
@@ -304,8 +305,14 @@ async def handle_task_delegate_callback(callback: CallbackQuery):
     await callback.answer(f"Отправлено {role_names.get(target_role, target_role)}")
 
 
+async def errors_handler(event: ErrorEvent):
+    """Логировать ошибки бота."""
+    logging.exception("Bot error: %s", event.exception)
+
+
 def setup_handlers(dp: Dispatcher):
     """Регистрация хендлеров."""
+    dp.error.register(errors_handler)
     dp.message.register(cmd_start_login, Command("start"))
     dp.callback_query.register(handle_task_status_callback, F.data.startswith("task_status:"))
     dp.callback_query.register(handle_task_delegate_callback, F.data.startswith("task_delegate:"))
@@ -321,7 +328,9 @@ def setup_handlers(dp: Dispatcher):
 async def run_polling():
     """Запуск long-polling бота."""
     if not TELEGRAM_BOT_TOKEN:
+        logging.warning("TELEGRAM_BOT_TOKEN не задан — бот не запущен")
         return
+    logging.basicConfig(level=logging.INFO)
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
     setup_handlers(dp)
