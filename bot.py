@@ -56,14 +56,14 @@ async def cmd_start_login(message: Message):
         text = (
             f"👋 Привет, {safe_name}!\n\n"
             f'<a href="{safe_url}">Ссылка для входа в Integra Sales</a>\n\n'
-            f"Действительна 10 минут."
+            f"Действительна 30 минут."
         )
         await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
     else:
         text = (
             f"👋 Привет, {contact['name']}!\n\n"
             f"Нажмите кнопку ниже для входа.\n\n"
-            f"Действительна 10 минут."
+            f"Действительна 30 минут."
         )
         await message.answer(text, reply_markup=keyboard)
 

@@ -12,7 +12,7 @@ def create(contact: dict, telegram_id: str) -> str:
     _tokens[token] = {
         "contact": contact,
         "telegram_id": telegram_id,
-        "expires": datetime.now() + timedelta(minutes=10),
+        "expires": datetime.now() + timedelta(minutes=30),
     }
     return token
 
