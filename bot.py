@@ -240,7 +240,7 @@ async def handle_task_status_callback(callback: CallbackQuery):
     await callback.answer(f"Статус: {label}")
 
 
-# target_role -> from_role (кто нажал кнопку)
+# target_role -> from_role (кто нажал кнопку), если не задано в task.role
 DELEGATE_FROM = {"engineer": "estimator", "estimator": "engineer", "engineer_other": "engineer"}
 
 
@@ -270,7 +270,7 @@ async def handle_task_delegate_callback(callback: CallbackQuery):
     if task.get("tg_chat_id") != chat_id:
         await callback.answer("Эта задача не для вас")
         return
-    from_role = DELEGATE_FROM[target_role]
+    from_role = task.get("role") or DELEGATE_FROM.get(target_role, "engineer")
     lookup_role = "engineer" if target_role == "engineer_other" else target_role
     contacts = get_contacts_by_role(lookup_role)
     # Для engineer_other исключаем текущего инженера

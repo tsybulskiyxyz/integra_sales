@@ -186,7 +186,7 @@ ROLE_LABELS = {
     "test": "Тест",
 }
 
-MANAGER_ROLES = {"sales_manager", "sales_head"}
+MANAGER_ROLES = {"sales_manager", "sales_head", "test"}
 
 
 def _get_user(request: Request) -> Optional[dict]:

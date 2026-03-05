@@ -200,10 +200,10 @@ def add_task_status_keyboard(chat_id: str, message_id: int, task_id: int, role: 
             {"text": "✅ Готово", "callback_data": f"task_status:{task_id}:done"},
         ]
     ]
-    # Сметчица и инженер могут обмениваться сообщениями друг с другом
+    # Сметчица, инженер и тест могут обмениваться сообщениями друг с другом
     if role == "estimator":
         keyboard.append([{"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer"}])
-    elif role == "engineer":
+    elif role in ("engineer", "test"):
         keyboard.append([
             {"text": "📤 Связаться со сметчицей", "callback_data": f"task_delegate:{task_id}:estimator"},
             {"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer_other"},
@@ -274,7 +274,7 @@ def send_task_from_worker(
     client_name: str = "",
 ) -> dict | bool:
     """Отправить запрос на связь от сметчицы/инженера другому. Возвращает dict с message_id."""
-    role_names = {"estimator": "Сметчица", "engineer": "Инженер"}
+    role_names = {"estimator": "Сметчица", "engineer": "Инженер", "test": "Тест"}
     from_name = role_names.get(from_role, from_role)
     object_info = f"Контакт: {phone}"
     if client_name:
