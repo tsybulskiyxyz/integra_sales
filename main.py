@@ -153,6 +153,18 @@ def _build_weekly_report() -> Optional[str]:
             f"% целевых от дозвонов: {stats.target_percent}",
             f"% закрытых от целевых: {stats.closed_percent}",
         ])
+        # Из прозвоненных за неделю ушли на КП
+        extras = get_row_extras()
+        max_stages = get_max_stages()
+        reached_week = [r for r in week_rows if r.status in (RowStatus.RED, RowStatus.GREEN, RowStatus.PURPLE)]
+        kp_count = 0
+        for r in reached_week:
+            key = (r.phone, r.row_index)
+            local_status = extras.get(key, {}).get("local_status", "first_contact")
+            stage_rank = max_stages.get(key, 0)
+            if local_status in ("proposal_sent", "closed") or stage_rank >= 3:
+                kp_count += 1
+        lines.append(f"Из прозвоненных за неделю ушли на КП: {kp_count} из {len(reached_week)}")
         return "\n".join(lines)
     except Exception:
         return None
