@@ -50,7 +50,7 @@ from database import (
 )
 from google_sheets import fetch_call_data, debug_colors, get_spreadsheet_last_modified
 from stats import calculate_stats
-from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_weekly_report, set_bot_commands
+from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_weekly_report, set_bot_commands
 from models import RowStatus
 
 
@@ -613,6 +613,11 @@ async def api_task_status(data: TaskStatusInput, request: Request):
     if task.get("client_name"):
         client_line += f" / {task['client_name']}"
     client_line += "\n"
+    # Получателю задачи — уведомление с кнопками, чтобы не возвращаться к прошлому сообщению
+    recipient_chat = task.get("tg_chat_id")
+    if recipient_chat:
+        send_task_status_to_recipient(recipient_chat, data.task_id, task, data.status, user["name"])
+    # Менеджеру или отправителю подзадачи
     target = task.get("reply_to_chat_id") or TELEGRAM_CHAT_ID
     send_telegram(
         f"📋 Статус задачи обновлён\n\n{client_line}"

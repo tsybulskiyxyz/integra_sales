@@ -188,19 +188,14 @@ def send_document(chat_id: str, file_content: bytes, filename: str, caption: str
         return False
 
 
-def add_task_status_keyboard(chat_id: str, message_id: int, task_id: int, role: str = "") -> bool:
-    """Добавить inline-кнопки смены статуса и делегирования (сметчица↔инженер)."""
-    token = TELEGRAM_BOT_TOKEN
-    if not token or not chat_id:
-        return False
-    url = f"https://api.telegram.org/bot{token}/editMessageReplyMarkup"
+def _build_task_keyboard(task_id: int, role: str) -> dict:
+    """Собрать inline-кнопки смены статуса и делегирования."""
     keyboard = [
         [
             {"text": "🔹 В работе", "callback_data": f"task_status:{task_id}:in_progress"},
             {"text": "✅ Готово", "callback_data": f"task_status:{task_id}:done"},
         ]
     ]
-    # Сметчица, инженер и тест могут обмениваться сообщениями друг с другом
     if role == "estimator":
         keyboard.append([{"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer"}])
     elif role in ("engineer", "test"):
@@ -208,7 +203,36 @@ def add_task_status_keyboard(chat_id: str, message_id: int, task_id: int, role: 
             {"text": "📤 Связаться со сметчицей", "callback_data": f"task_delegate:{task_id}:estimator"},
             {"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer_other"},
         ])
-    reply_markup = {"inline_keyboard": keyboard}
+    return {"inline_keyboard": keyboard}
+
+
+def send_task_status_to_recipient(chat_id: str, task_id: int, task: dict, status: str, worker_name: str) -> bool:
+    """Отправить получателю задачи уведомление об изменении статуса с кнопками — чтобы не возвращаться к прошлому сообщению."""
+    if not chat_id:
+        return False
+    client_line = f"Клиент: {task.get('phone', '')}"
+    if task.get("client_name"):
+        client_line += f" / {task['client_name']}"
+    client_line += "\n"
+    label = {"new": "Новая", "in_progress": "В работе", "done": "Готово"}.get(status, status)
+    msg = (
+        f"📋 Статус задачи: {label}\n\n"
+        f"{client_line}"
+        f"Задача: {task.get('task_text', '')[:80]}\n\n"
+        f"Статус изменён: {worker_name}"
+    )
+    role = task.get("role", "")
+    result = send_telegram(msg, chat_id, reply_markup=_build_task_keyboard(task_id, role))
+    return bool(result) and not (isinstance(result, dict) and "_error" in result)
+
+
+def add_task_status_keyboard(chat_id: str, message_id: int, task_id: int, role: str = "") -> bool:
+    """Добавить inline-кнопки смены статуса и делегирования (сметчица↔инженер)."""
+    token = TELEGRAM_BOT_TOKEN
+    if not token or not chat_id:
+        return False
+    url = f"https://api.telegram.org/bot{token}/editMessageReplyMarkup"
+    reply_markup = _build_task_keyboard(task_id, role)
     try:
         with httpx.Client() as client:
             r = client.post(url, json={

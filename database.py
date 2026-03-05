@@ -497,7 +497,7 @@ def find_task_by_message(tg_message_id: int, tg_chat_id: str) -> Optional[dict]:
     conn = get_connection()
     try:
         row = conn.execute(
-            """SELECT tm.id, tm.phone, tm.role, tm.task_text,
+            """SELECT tm.id, tm.phone, tm.role, tm.task_text, tm.tg_chat_id,
                       (SELECT econom_number FROM row_extras WHERE phone = tm.phone LIMIT 1),
                       tm.parent_task_id,
                       (SELECT tg_chat_id FROM task_messages WHERE id = tm.parent_task_id)
@@ -507,7 +507,7 @@ def find_task_by_message(tg_message_id: int, tg_chat_id: str) -> Optional[dict]:
         if row:
             return {
                 "id": row[0], "phone": row[1], "role": row[2], "task_text": row[3],
-                "client_name": row[4] or "", "parent_task_id": row[5], "reply_to_chat_id": row[6],
+                "tg_chat_id": row[4], "client_name": row[5] or "", "parent_task_id": row[6], "reply_to_chat_id": row[7],
             }
         return None
     finally:
@@ -519,7 +519,7 @@ def find_last_task_for_chat(tg_chat_id: str) -> Optional[dict]:
     conn = get_connection()
     try:
         row = conn.execute(
-            """SELECT tm.id, tm.phone, tm.role, tm.task_text,
+            """SELECT tm.id, tm.phone, tm.role, tm.task_text, tm.tg_chat_id,
                       (SELECT econom_number FROM row_extras WHERE phone = tm.phone LIMIT 1),
                       tm.parent_task_id,
                       (SELECT tg_chat_id FROM task_messages WHERE id = tm.parent_task_id)
@@ -529,7 +529,7 @@ def find_last_task_for_chat(tg_chat_id: str) -> Optional[dict]:
         if row:
             return {
                 "id": row[0], "phone": row[1], "role": row[2], "task_text": row[3],
-                "client_name": row[4] or "", "parent_task_id": row[5], "reply_to_chat_id": row[6],
+                "tg_chat_id": row[4], "client_name": row[5] or "", "parent_task_id": row[6], "reply_to_chat_id": row[7],
             }
         return None
     finally:

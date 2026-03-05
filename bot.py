@@ -17,7 +17,7 @@ from database import (
     save_task_message,
 )
 from auth_tokens import create as create_login_token
-from telegram_bot import send_telegram, forward_reply_to_manager, send_task_from_worker, add_task_status_keyboard
+from telegram_bot import send_telegram, forward_reply_to_manager, send_task_from_worker, add_task_status_keyboard, send_task_status_to_recipient
 
 
 def _get_login_link(token: str) -> str:
@@ -81,13 +81,18 @@ def _format_client_line(phone: str, client_name: str = "") -> str:
 
 
 def _do_task_status_update(task_info: dict, status: str, worker_name: str) -> bool:
-    """Обновить статус задачи и уведомить менеджера или отправителя подзадачи."""
+    """Обновить статус задачи и уведомить получателя (с кнопками) + менеджера."""
     task_id = task_info.get("id")
     if not task_id:
         return False
     update_task_status(task_id, status)
     label = TASK_STATUS_LABELS.get(status, status)
     add_event(task_info["phone"], "task_status", f"{worker_name}: статус задачи → {label}")
+    # Получателю задачи — новое сообщение с кнопками
+    recipient_chat = task_info.get("tg_chat_id")
+    if recipient_chat:
+        send_task_status_to_recipient(recipient_chat, task_id, task_info, status, worker_name)
+    # Менеджеру или отправителю подзадачи
     client_line = _format_client_line(task_info.get("phone", ""), task_info.get("client_name", ""))
     msg = (
         f"📋 Статус задачи обновлён\n\n"
@@ -227,6 +232,9 @@ async def handle_task_status_callback(callback: CallbackQuery):
     worker_name = (sender.first_name or "") + (f" {sender.last_name}" if sender.last_name else "")
     worker_name = worker_name.strip() or "Сотрудник"
     add_event(task["phone"], "task_status", f"{worker_name}: статус задачи → {label}")
+    # Получателю задачи — новое сообщение с кнопками, чтобы не возвращаться к прошлому
+    send_task_status_to_recipient(chat_id, task_id, task, status, worker_name)
+    # Менеджеру или отправителю подзадачи
     client_line = _format_client_line(task.get("phone", ""), task.get("client_name", ""))
     msg = (
         f"📋 Статус задачи обновлён\n\n"
