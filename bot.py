@@ -3,7 +3,7 @@ import html
 import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ErrorEvent
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ErrorEvent, LinkPreviewOptions
 
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, APP_BASE_URL, LOGIN_LINK_URL
 from database import (
@@ -58,14 +58,14 @@ async def cmd_start_login(message: Message):
             f'<a href="{safe_url}">Ссылка для входа в Integra Sales</a>\n\n'
             f"Действительна 30 минут."
         )
-        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+        await message.answer(text, parse_mode="HTML", reply_markup=keyboard, link_preview_options=LinkPreviewOptions(is_disabled=True))
     else:
         text = (
             f"👋 Привет, {contact['name']}!\n\n"
             f"Нажмите кнопку ниже для входа.\n\n"
             f"Действительна 30 минут."
         )
-        await message.answer(text, reply_markup=keyboard)
+        await message.answer(text, reply_markup=keyboard, link_preview_options=LinkPreviewOptions(is_disabled=True))
 
 
 TASK_STATUS_LABELS = {"new": "Новая", "in_progress": "В работе", "done": "Готово"}

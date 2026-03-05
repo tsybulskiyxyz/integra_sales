@@ -129,7 +129,8 @@ def save_auth_token(token: str, contact_id: int, name: str, role: str, telegram_
 
 
 def consume_auth_token(token: str) -> Optional[dict]:
-    """Проверить и удалить токен. Возвращает {contact, telegram_id} или None."""
+    """Проверить токен. Возвращает {contact, telegram_id} или None.
+    Токен НЕ удаляется — иначе Telegram prefetch (при показе превью ссылки) съедает его до клика пользователя."""
     conn = get_connection()
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -139,8 +140,6 @@ def consume_auth_token(token: str) -> Optional[dict]:
         ).fetchone()
         if not row:
             return None
-        conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
-        conn.commit()
         return {
             "contact": {"id": row[0], "name": row[1], "role": row[2], "telegram_id": row[3]},
             "telegram_id": row[3],
