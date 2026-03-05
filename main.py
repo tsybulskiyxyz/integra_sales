@@ -50,7 +50,7 @@ from database import (
 )
 from google_sheets import fetch_call_data, debug_colors, get_spreadsheet_last_modified
 from stats import calculate_stats
-from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_weekly_report, set_bot_commands
+from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_task_from_worker, send_weekly_report, set_bot_commands
 from models import RowStatus
 
 
@@ -594,6 +594,11 @@ class TaskCommentInput(BaseModel):
     comment: str
 
 
+class TaskDelegateInput(BaseModel):
+    task_id: int
+    recipient_telegram_id: str
+
+
 TASK_STATUS_LABELS = {"new": "Новая", "in_progress": "В работе", "done": "Готово"}
 
 
@@ -626,6 +631,52 @@ async def api_task_status(data: TaskStatusInput, request: Request):
         f"От: {user['name']}",
         target,
     )
+    return {"ok": True}
+
+
+WORKER_ROLES = {"estimator", "engineer", "test"}
+
+
+@app.post("/api/task-delegate")
+async def api_task_delegate(data: TaskDelegateInput, request: Request):
+    """Сотрудник отправляет запрос на связь другому (сметчица↔инженер). Выбор получателя — на портале."""
+    user = _require_user(request)
+    if user.get("role") not in WORKER_ROLES:
+        raise HTTPException(403, "Доступ только для сметчицы, инженера или теста")
+    task = get_task_by_id(data.task_id)
+    if not task:
+        raise HTTPException(404, "Задача не найдена")
+    if task.get("tg_chat_id") != user.get("telegram_id"):
+        raise HTTPException(403, "Эта задача не для вас")
+    if not data.recipient_telegram_id:
+        raise HTTPException(400, "Укажите получателя")
+    contacts = get_all_contacts()
+    recipient = next((c for c in contacts if c.get("telegram_id") == data.recipient_telegram_id), None)
+    if not recipient or not recipient.get("telegram_id"):
+        raise HTTPException(400, "Получатель не найден")
+    rec_role = recipient.get("role", "")
+    if rec_role not in ("estimator", "engineer"):
+        raise HTTPException(400, "Можно отправить только сметчице или инженеру")
+    if recipient.get("telegram_id") == user.get("telegram_id"):
+        raise HTTPException(400, "Нельзя отправить себе")
+    result = send_task_from_worker(
+        from_role=user.get("role", "engineer"),
+        to_chat_id=data.recipient_telegram_id,
+        phone=task["phone"],
+        client_name=task.get("client_name", ""),
+    )
+    if not result or (isinstance(result, dict) and result.get("_error")):
+        err = result.get("_error", "Ошибка отправки") if isinstance(result, dict) else "Ошибка отправки"
+        return {"ok": False, "error": str(err)}
+    tg_msg_id = result.get("message_id") if isinstance(result, dict) else None
+    if tg_msg_id:
+        new_id = save_task_message(
+            tg_msg_id, data.recipient_telegram_id, task["phone"], rec_role,
+            "Связаться по объекту", parent_task_id=data.task_id,
+        )
+        if new_id:
+            add_task_status_keyboard(data.recipient_telegram_id, tg_msg_id, new_id, rec_role)
+    add_event(task["phone"], "task_sent", f"Связь ({user.get('role')}↔{rec_role})", None)
     return {"ok": True}
 
 

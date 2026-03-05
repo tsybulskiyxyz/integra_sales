@@ -188,22 +188,14 @@ def send_document(chat_id: str, file_content: bytes, filename: str, caption: str
         return False
 
 
-def _build_task_keyboard(task_id: int, role: str) -> dict:
-    """Собрать inline-кнопки смены статуса и делегирования."""
-    keyboard = [
-        [
+def _build_task_keyboard(task_id: int, role: str = "") -> dict:
+    """Собрать inline-кнопки только смены статуса. Делегирование — на портале CRM."""
+    return {
+        "inline_keyboard": [[
             {"text": "🔹 В работе", "callback_data": f"task_status:{task_id}:in_progress"},
             {"text": "✅ Готово", "callback_data": f"task_status:{task_id}:done"},
-        ]
-    ]
-    if role == "estimator":
-        keyboard.append([{"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer"}])
-    elif role in ("engineer", "test"):
-        keyboard.append([
-            {"text": "📤 Связаться со сметчицей", "callback_data": f"task_delegate:{task_id}:estimator"},
-            {"text": "📤 Связаться с инженером", "callback_data": f"task_delegate:{task_id}:engineer_other"},
-        ])
-    return {"inline_keyboard": keyboard}
+        ]]
+    }
 
 
 def send_task_status_to_recipient(chat_id: str, task_id: int, task: dict, status: str, worker_name: str) -> bool:
@@ -227,7 +219,7 @@ def send_task_status_to_recipient(chat_id: str, task_id: int, task: dict, status
 
 
 def add_task_status_keyboard(chat_id: str, message_id: int, task_id: int, role: str = "") -> bool:
-    """Добавить inline-кнопки смены статуса и делегирования (сметчица↔инженер)."""
+    """Добавить inline-кнопки только смены статуса (В работе / Готово). Делегирование — на портале."""
     token = TELEGRAM_BOT_TOKEN
     if not token or not chat_id:
         return False

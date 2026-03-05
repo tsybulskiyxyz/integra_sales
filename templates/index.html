@@ -399,6 +399,14 @@
             </div>
             <div id="workerTasks"><p style="color:var(--muted)">Загрузка...</p></div>
         </div>
+        <div id="delegateModal" class="modal" style="display:none">
+            <div class="modal-content" style="max-width:360px">
+                <h3 style="margin-bottom:1rem">Выберите получателя</h3>
+                <p id="delegateModalLabel" style="color:var(--muted);font-size:0.9rem;margin-bottom:0.75rem"></p>
+                <div id="delegateRecipients"></div>
+                <button onclick="closeDelegateModal()" class="btn-muted" style="margin-top:1rem">Отмена</button>
+            </div>
+        </div>
         {% endif %}
 
         {% if is_manager %}
@@ -618,6 +626,8 @@
 
     <script>
         const IS_MANAGER = {{ is_manager | tojson }};
+        const USER_ROLE = {{ user.role | tojson }};
+        const USER_TELEGRAM_ID = {{ (user.telegram_id or '') | tojson }};
         let rowsData = [];
         let orangeRows = [];
         let allStats = {};
@@ -1605,6 +1615,11 @@
                         ${t.status !== 'done' ? `<button onclick="setTaskStatus(${t.id},'done')" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Готово</button>` : ''}
                         <button onclick="toggleTaskComment(${t.id})" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">Комментарий</button>
                         <button onclick="toggleTaskHistory(${t.id})" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.75rem">История</button>
+                        ${USER_ROLE === 'estimator' ? `<button onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>` : ''}
+                        ${(USER_ROLE === 'engineer' || USER_ROLE === 'test') ? `
+                            <button onclick="showDelegateModal(${t.id}, 'estimator', 'сметчице')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться со сметчицей</button>
+                            <button onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>
+                        ` : ''}
                     </div>
                     <div id="taskComment_${t.id}" style="display:none;margin-top:0.5rem">
                         <div style="display:flex;gap:0.4rem">
@@ -1665,6 +1680,51 @@
                 if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
                 input.value = '';
                 alert('Комментарий отправлен');
+                loadMyTasks();
+            } catch (e) { alert(e.message); }
+        }
+
+        let delegateTaskId = null;
+        async function showDelegateModal(taskId, targetRole, targetLabel) {
+            delegateTaskId = taskId;
+            document.getElementById('delegateModalLabel').textContent = `Кому отправить запрос на связь (${targetLabel})?`;
+            const wrap = document.getElementById('delegateRecipients');
+            wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
+            document.getElementById('delegateModal').style.display = 'flex';
+            try {
+                const r = await fetch('/api/contacts');
+                const d = await r.json();
+                const contacts = (d.contacts || []).filter(c =>
+                    c.telegram_id && c.role === targetRole && c.telegram_id !== USER_TELEGRAM_ID
+                );
+                if (!contacts.length) {
+                    wrap.innerHTML = `<p style="color:var(--muted)">Нет контактов с ролью ${roleLabels[targetRole] || targetRole}</p>`;
+                    return;
+                }
+                wrap.innerHTML = contacts.map(c =>
+                    `<button onclick="delegateTask('${c.telegram_id}')" class="btn-primary" style="display:block;width:100%;margin-bottom:0.5rem;text-align:left;padding:0.5rem 0.75rem">
+                        ${c.name} — ${roleLabels[c.role] || c.role}
+                    </button>`
+                ).join('');
+            } catch (e) {
+                wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+            }
+        }
+        function closeDelegateModal() {
+            document.getElementById('delegateModal').style.display = 'none';
+            delegateTaskId = null;
+        }
+        async function delegateTask(recipientTelegramId) {
+            if (!delegateTaskId) return;
+            try {
+                const r = await fetch('/api/task-delegate', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ task_id: delegateTaskId, recipient_telegram_id: recipientTelegramId })
+                });
+                const d = await r.json();
+                if (!r.ok) { alert(d.detail || d.error || 'Ошибка'); return; }
+                closeDelegateModal();
+                alert('Запрос отправлен');
                 loadMyTasks();
             } catch (e) { alert(e.message); }
         }
