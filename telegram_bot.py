@@ -288,6 +288,7 @@ def send_task_from_worker(
     to_chat_id: str,
     phone: str,
     client_name: str = "",
+    comment: str = "",
 ) -> dict | bool:
     """Отправить запрос на связь от сметчицы/инженера другому. Возвращает dict с message_id."""
     role_names = {"estimator": "Сметчица", "engineer": "Инженер", "test": "Тест"}
@@ -297,7 +298,9 @@ def send_task_from_worker(
         object_info += f"\nИмя: {client_name}"
     msg = f"📋 {from_name} хочет связаться по объекту\n\n"
     msg += f"{object_info}\n\n"
-    msg += "💬 Ответьте в чате — ваше сообщение придёт отправителю."
+    if comment:
+        msg += f"💬 Сообщение:\n{comment}\n\n"
+    msg += "Ответьте в чате — ваше сообщение придёт отправителю."
     return send_telegram(msg, to_chat_id)
 
 

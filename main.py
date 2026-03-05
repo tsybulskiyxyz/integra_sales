@@ -597,6 +597,7 @@ class TaskCommentInput(BaseModel):
 class TaskDelegateInput(BaseModel):
     task_id: int
     recipient_telegram_id: str
+    comment: Optional[str] = None
 
 
 TASK_STATUS_LABELS = {"new": "Новая", "in_progress": "В работе", "done": "Готово"}
@@ -635,6 +636,30 @@ async def api_task_status(data: TaskStatusInput, request: Request):
 
 
 WORKER_ROLES = {"estimator", "engineer", "test"}
+ROLE_LABELS_DELEGATE = {"estimator": "Сметчица", "engineer": "Инженер", "test": "Тест"}
+
+
+def _notify_manager_delegate(
+    from_name: str,
+    from_role: str,
+    to_name: str,
+    to_role: str,
+    phone: str,
+    client_name: str = "",
+    comment: str = "",
+):
+    """Оповестить менеджера о запросе на связь между сотрудниками."""
+    from_label = ROLE_LABELS_DELEGATE.get(from_role, from_role)
+    to_label = ROLE_LABELS_DELEGATE.get(to_role, to_role)
+    msg = f"📤 Запрос на связь\n\n"
+    msg += f"{from_name} ({from_label}) → {to_name} ({to_label})\n\n"
+    msg += f"Клиент: {phone}"
+    if client_name:
+        msg += f" / {client_name}"
+    msg += "\n"
+    if comment:
+        msg += f"\nСообщение: {comment}"
+    send_telegram(msg, TELEGRAM_CHAT_ID)
 
 
 @app.post("/api/task-delegate")
@@ -659,24 +684,37 @@ async def api_task_delegate(data: TaskDelegateInput, request: Request):
         raise HTTPException(400, "Можно отправить только сметчице или инженеру")
     if recipient.get("telegram_id") == user.get("telegram_id"):
         raise HTTPException(400, "Нельзя отправить себе")
+    comment = (data.comment or "").strip()
     result = send_task_from_worker(
         from_role=user.get("role", "engineer"),
         to_chat_id=data.recipient_telegram_id,
         phone=task["phone"],
         client_name=task.get("client_name", ""),
+        comment=comment,
     )
     if not result or (isinstance(result, dict) and result.get("_error")):
         err = result.get("_error", "Ошибка отправки") if isinstance(result, dict) else "Ошибка отправки"
         return {"ok": False, "error": str(err)}
     tg_msg_id = result.get("message_id") if isinstance(result, dict) else None
+    task_text = f"Связаться по объекту{f': {comment[:80]}' if comment else ''}"
     if tg_msg_id:
         new_id = save_task_message(
             tg_msg_id, data.recipient_telegram_id, task["phone"], rec_role,
-            "Связаться по объекту", parent_task_id=data.task_id,
+            task_text, parent_task_id=data.task_id,
         )
         if new_id:
             add_task_status_keyboard(data.recipient_telegram_id, tg_msg_id, new_id, rec_role)
     add_event(task["phone"], "task_sent", f"Связь ({user.get('role')}↔{rec_role})", None)
+    # Оповещение менеджера
+    _notify_manager_delegate(
+        from_name=user.get("name", ""),
+        from_role=user.get("role", ""),
+        to_name=recipient.get("name", ""),
+        to_role=rec_role,
+        phone=task["phone"],
+        client_name=task.get("client_name", ""),
+        comment=comment,
+    )
     return {"ok": True}
 
 

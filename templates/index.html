@@ -400,11 +400,17 @@
             <div id="workerTasks"><p style="color:var(--muted)">Загрузка...</p></div>
         </div>
         <div id="delegateModal" class="modal" style="display:none">
-            <div class="modal-content" style="max-width:360px">
-                <h3 style="margin-bottom:1rem">Выберите получателя</h3>
-                <p id="delegateModalLabel" style="color:var(--muted);font-size:0.9rem;margin-bottom:0.75rem"></p>
+            <div class="modal-content" style="max-width:400px">
+                <h3 style="margin-bottom:1rem">Запрос на связь</h3>
+                <div style="margin-bottom:1rem">
+                    <label style="color:var(--muted);font-size:0.85rem;display:block;margin-bottom:0.4rem">Сообщение получателю (что нужно уточнить/сделать):</label>
+                    <textarea id="delegateComment" placeholder="Например: уточните выезд на объект, нужна смета по электрике..." rows="3" style="width:100%;resize:vertical;min-height:60px"></textarea>
+                </div>
+                <p id="delegateModalLabel" style="color:var(--muted);font-size:0.9rem;margin-bottom:0.5rem"></p>
                 <div id="delegateRecipients"></div>
-                <button onclick="closeDelegateModal()" class="btn-muted" style="margin-top:1rem">Отмена</button>
+                <div style="margin-top:1rem;display:flex;gap:0.5rem">
+                    <button onclick="closeDelegateModal()" class="btn-muted">Отмена</button>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -1687,7 +1693,9 @@
         let delegateTaskId = null;
         async function showDelegateModal(taskId, targetRole, targetLabel) {
             delegateTaskId = taskId;
-            document.getElementById('delegateModalLabel').textContent = `Кому отправить запрос на связь (${targetLabel})?`;
+            const commentEl = document.getElementById('delegateComment');
+            if (commentEl) commentEl.value = '';
+            document.getElementById('delegateModalLabel').textContent = `Кому отправить (${targetLabel})?`;
             const wrap = document.getElementById('delegateRecipients');
             wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
             document.getElementById('delegateModal').style.display = 'flex';
@@ -1713,13 +1721,16 @@
         function closeDelegateModal() {
             document.getElementById('delegateModal').style.display = 'none';
             delegateTaskId = null;
+            const el = document.getElementById('delegateComment');
+            if (el) el.value = '';
         }
         async function delegateTask(recipientTelegramId) {
             if (!delegateTaskId) return;
+            const comment = (document.getElementById('delegateComment')?.value || '').trim();
             try {
                 const r = await fetch('/api/task-delegate', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ task_id: delegateTaskId, recipient_telegram_id: recipientTelegramId })
+                    body: JSON.stringify({ task_id: delegateTaskId, recipient_telegram_id: recipientTelegramId, comment: comment || null })
                 });
                 const d = await r.json();
                 if (!r.ok) { alert(d.detail || d.error || 'Ошибка'); return; }
