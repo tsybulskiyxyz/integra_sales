@@ -99,6 +99,52 @@ def init_db():
             conn.commit()
         except Exception:
             pass
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+                token TEXT PRIMARY KEY,
+                contact_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                telegram_id TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_auth_token(token: str, contact_id: int, name: str, role: str, telegram_id: str, expires_at: str):
+    """Сохранить токен входа в БД."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO auth_tokens (token, contact_id, name, role, telegram_id, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (token, contact_id, name, role, telegram_id, expires_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def consume_auth_token(token: str) -> Optional[dict]:
+    """Проверить и удалить токен. Возвращает {contact, telegram_id} или None."""
+    conn = get_connection()
+    try:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        row = conn.execute(
+            "SELECT contact_id, name, role, telegram_id FROM auth_tokens WHERE token = ? AND expires_at > ?",
+            (token, now),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute("DELETE FROM auth_tokens WHERE token = ?", (token,))
+        conn.commit()
+        return {
+            "contact": {"id": row[0], "name": row[1], "role": row[2], "telegram_id": row[3]},
+            "telegram_id": row[3],
+        }
     finally:
         conn.close()
 
