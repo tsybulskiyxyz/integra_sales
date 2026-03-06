@@ -607,8 +607,8 @@
                 <textarea id="taskText" rows="3" placeholder="Что нужно сделать..." style="width:100%"></textarea>
             </div>
             <div class="form-row" style="flex-direction:column;align-items:stretch">
-                <label style="color:var(--muted);font-size:0.8rem">Прикрепить файл (опционально):</label>
-                <input type="file" id="taskFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="font-size:0.85rem">
+                <label style="color:var(--muted);font-size:0.8rem">Прикрепить файлы (опционально, можно несколько):</label>
+                <input type="file" id="taskFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple style="font-size:0.85rem">
             </div>
             <div class="form-row" style="justify-content:flex-end;gap:0.5rem">
                 <button onclick="closeTaskModal()" class="btn-muted">Отмена</button>
@@ -1203,7 +1203,9 @@
             formData.append('role', role);
             formData.append('recipient_telegram_id', tgId);
             if (fileInput?.files?.length) {
-                formData.append('file', fileInput.files[0]);
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('files', fileInput.files[i]);
+                }
             }
             try {
                 const resp = await fetch('/api/task', {
