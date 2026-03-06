@@ -130,21 +130,47 @@ LOGIN_LINK_URL=https://your-domain.com
 
 ---
 
-## 5. Файлы к задачам — если «Сервер вернул неверный ответ»
+## 5. Файлы к задачам (PDF, фото) — настройка Nginx
 
-При отправке задачи с фото/файлами Nginx может обрезать запрос (лимит 1 МБ по умолчанию). Добавь в **оба** блока `server` (и `listen 80`, и `listen 443`) в конфиге Nginx:
+Чтобы отправлять PDF и фото к задачам без ошибки «Сервер вернул неверный ответ»:
 
-```nginx
-client_max_body_size 15M;
+**1. Найди конфиг Nginx для домена:**
+```bash
+ls /etc/nginx/sites-available/
+# Обычно: integra-sales, integrasales.ru или default
 ```
 
-Проверь конфиг:
+**2. Открой конфиг:**
+```bash
+sudo nano /etc/nginx/sites-available/integra-sales
+# или тот файл, где твой домен integrasales.ru
+```
+
+**3. Добавь `client_max_body_size 15M;` в КАЖДЫЙ блок `server {`** — сразу после открывающей скобки:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name integrasales.ru;
+    client_max_body_size 15M;   # ← обязательно
+    # ... proxy_pass и т.д.
+}
+
+server {
+    listen 80;
+    server_name integrasales.ru;
+    client_max_body_size 15M;   # ← и здесь
+    # ...
+}
+```
+
+**4. Проверь и перезагрузи:**
 ```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Если конфиг редактировал Certbot — смотри `/etc/nginx/sites-available/integra-sales` или файл с твоим доменом.
+Без этого Nginx обрезает запросы > 1 МБ (фото и PDF часто больше).
 
 ---
 
