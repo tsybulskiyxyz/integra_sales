@@ -88,6 +88,7 @@ server {
     listen 80;
     server_name your-domain.com www.your-domain.com;
 
+    client_max_body_size 15M;
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;

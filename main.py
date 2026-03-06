@@ -783,7 +783,7 @@ async def api_send_task(
     task: str = Form(...),
     role: str = Form(...),
     recipient_telegram_id: Optional[str] = Form(None),
-    files: list[UploadFile] = File(default=None),
+    file: Optional[UploadFile] = File(None),
 ):
     user = _require_user(request)
     if user.get("role") not in MANAGER_ROLES:
@@ -806,21 +806,17 @@ async def api_send_task(
             task_id = save_task_message(tg_msg_id, chat_id, phone, role, task)
             if task_id:
                 add_task_status_keyboard(chat_id, tg_msg_id, task_id, role)
-    files = files or []
-    if ok and files:
-        for file in files:
-            if not file or not file.filename:
-                continue
-            content = await file.read()
-            if content:
-                if len(content) > 10 * 1024 * 1024:  # 10 MB
-                    raise HTTPException(400, f"Файл {file.filename} не более 10 МБ")
-                fn = file.filename or "file"
-                is_image = fn.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
-                if is_image:
-                    send_photo(chat_id, content, "📎 Файл к задаче")
-                else:
-                    send_document(chat_id, content, fn, "📎 Файл к задаче")
+    if ok and file and file.filename:
+        content = await file.read()
+        if content:
+            if len(content) > 10 * 1024 * 1024:  # 10 MB
+                raise HTTPException(400, "Файл не более 10 МБ")
+            fn = file.filename or "file"
+            is_image = fn.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
+            if is_image:
+                send_photo(chat_id, content, "📎 Файл к задаче")
+            else:
+                send_document(chat_id, content, fn, "📎 Файл к задаче")
     if ok:
         add_event(phone, "task_sent", f"Задача ({role}): {task}", None)
     if err_msg and "can't initiate conversation" in (err_msg or "").lower():
