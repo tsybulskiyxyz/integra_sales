@@ -465,7 +465,7 @@
         <div class="card" id="mainCard" style="display:none">
             <div class="tabs">
                 <span class="tab active" onclick="showTab('calls', this)">Целевые клиенты</span>
-                <span class="tab" onclick="showTab('callback', this)">Дозвонить <span id="callbackCount" style="font-size:0.75rem;color:#000"></span></span>
+                <span class="tab" onclick="showTab('callback', this)">Дозвонить <span id="callbackCount" class="dash-card-count" style="font-size:0.75rem;background:var(--accent);color:#000;margin-left:0.3rem;padding:0.1rem 0.4rem"></span></span>
                 <span class="tab" onclick="showTab('team', this)">Команда</span>
                 <span class="tab" onclick="showTab('tasks', this)">Управление</span>
                 <span class="tab" onclick="showTab('dashboard', this)">Сводка</span>
@@ -637,6 +637,7 @@
         let rowsData = [];
         let orangeRows = [];
         let allStats = {};
+        let summaryData = {};
         let activeFilter = 'all';
         let activePeriod = 'all';
         let activeDateFilter = 'all';
@@ -660,18 +661,15 @@
         ];
 
         function renderFunnel() {
-            const funnelRows = rowsData.filter(r => r.status === 'green');
-            const stageRank = { first_contact: 0, negotiation: 1, waiting: 2, proposal_sent: 3, closed: 4 };
-            const counts = {};
-            counts.first_contact = funnelRows.length;
-            FUNNEL_STAGES.slice(1).forEach(s => {
-                counts[s.key] = funnelRows.filter(r => (r.local_status || 'first_contact') === s.key).length;
-            });
-            const rejectedWithProposal = funnelRows.filter(r =>
-                (r.local_status || '') === 'rejected' &&
-                (stageRank[r.max_stage || ''] ?? 0) >= 3
-            ).length;
-            counts.proposal_sent += rejectedWithProposal;
+            const s = summaryData;
+            const counts = {
+                first_contact: s.first_contact || 0,
+                negotiation: s.negotiation || 0,
+                waiting: s.waiting || 0,
+                proposal_sent: s.proposal_sent || 0,
+                closed: s.closed || 0,
+            };
+            const totalQualified = counts.first_contact || 1;
             const wrap = document.getElementById('funnelWrap');
             const totalQualified = counts.first_contact;
             wrap.innerHTML = FUNNEL_STAGES.map((s, i) => {
@@ -880,7 +878,7 @@
                     <div class="dash-card">
                         <div class="dash-card-header">
                             <h4>📞 Дозвонить</h4>
-                            <span class="dash-card-count" style="background:var(--accent)">${d.orange.length}</span>
+                            <span class="dash-card-count" style="background:var(--accent);color:#000">${d.orange.length}</span>
                         </div>
                         <div class="dash-card-body">${orangeHtml}</div>
                     </div>
@@ -958,8 +956,9 @@
                 rowsData = data.rows;
                 orangeRows = data.orange_rows || [];
                 allStats = data.stats;
+                summaryData = data.summary || {};
                 dataLoaded = true;
-                document.getElementById('callbackCount').textContent = orangeRows.length ? `(${orangeRows.length})` : '';
+                document.getElementById('callbackCount').textContent = `(${orangeRows.length})`;
                 document.getElementById('statsSection').style.display = 'block';
                 document.getElementById('funnelSection').style.display = 'block';
                 updateStats();

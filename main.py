@@ -416,9 +416,11 @@ async def get_data():
     stats = calculate_stats(rows, working_days)
     total_calls = len(rows)
     avg_per_day = round(total_calls / working_days, 1) if working_days else 0
+    summary = get_status_summary()
     return {
         "rows": out_rows,
         "orange_rows": orange_rows,
+        "summary": summary,
         "stats": {
             "total_rows": stats.total_rows,
             "red_count": stats.red_count,
