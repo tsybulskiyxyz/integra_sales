@@ -130,7 +130,25 @@ LOGIN_LINK_URL=https://your-domain.com
 
 ---
 
-## 5. Полезные команды
+## 5. Файлы к задачам — если «Сервер вернул неверный ответ»
+
+При отправке задачи с фото/файлами Nginx может обрезать запрос (лимит 1 МБ по умолчанию). Добавь в **оба** блока `server` (и `listen 80`, и `listen 443`) в конфиге Nginx:
+
+```nginx
+client_max_body_size 15M;
+```
+
+Проверь конфиг:
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Если конфиг редактировал Certbot — смотри `/etc/nginx/sites-available/integra-sales` или файл с твоим доменом.
+
+---
+
+## 6. Полезные команды
 
 | Действие | Команда |
 |----------|---------|
@@ -141,7 +159,7 @@ LOGIN_LINK_URL=https://your-domain.com
 
 ---
 
-## 6. Проверка
+## 7. Проверка
 
 - Сайт: `https://your-domain.com`
 - Бот в Telegram должен отвечать на /start
