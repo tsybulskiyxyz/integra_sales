@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime as _dt, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -776,16 +776,17 @@ async def api_client_history(phone: str):
 
 
 @app.post("/api/task")
-async def api_send_task(
-    request: Request,
-    phone: str = Form(...),
-    object_info: str = Form(...),
-    task: str = Form(...),
-    role: str = Form(...),
-    recipient_telegram_id: Optional[str] = Form(None),
-    files: list[UploadFile] | None = File(None),
-):
+async def api_send_task(request: Request):
+    """Отправка задачи. Форма вручную — Form+File вместе ломали парсинг."""
     try:
+        form = await request.form()
+        phone = form.get("phone") or ""
+        object_info = form.get("object_info") or ""
+        task = form.get("task") or ""
+        role = form.get("role") or "sales_manager"
+        recipient_telegram_id = form.get("recipient_telegram_id") or None
+        if not phone or not task:
+            raise HTTPException(400, "Укажите телефон и задачу")
         user = _require_user(request)
         if user.get("role") not in MANAGER_ROLES:
             raise HTTPException(403, "Доступ только для менеджера")
@@ -807,15 +808,18 @@ async def api_send_task(
                 task_id = save_task_message(tg_msg_id, chat_id, phone, role, task)
                 if task_id:
                     add_task_status_keyboard(chat_id, tg_msg_id, task_id, role)
-        if ok:
-            for f in (files or []):
-                if not f or not f.filename:
-                    continue
+        files_to_send = []
+        for key in ("file", "files"):
+            for v in form.getlist(key):
+                if v and hasattr(v, "filename") and hasattr(v, "read"):
+                    files_to_send.append(v)
+        if ok and files_to_send:
+            for f in files_to_send:
                 content = await f.read()
                 if content:
                     if len(content) > 10 * 1024 * 1024:
-                        raise HTTPException(400, f"Файл {f.filename} не более 10 МБ")
-                    fn = f.filename or "file"
+                        raise HTTPException(400, f"Файл не более 10 МБ")
+                    fn = getattr(f, "filename", None) or "file"
                     is_image = fn.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
                     if is_image:
                         send_photo(chat_id, content, "📎 Файл к задаче")
