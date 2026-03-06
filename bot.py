@@ -97,7 +97,7 @@ def _do_task_status_update(task_info: dict, status: str, worker_name: str) -> bo
     msg = (
         f"📋 Статус задачи обновлён\n\n"
         f"{client_line}"
-        f"Задача: {task_info['task_text'][:80]}\n"
+        f"Задача: {task_info['task_text']}\n"
         f"Статус: {label}\n"
         f"От: {worker_name}"
     )
@@ -239,7 +239,7 @@ async def handle_task_status_callback(callback: CallbackQuery):
     msg = (
         f"📋 Статус задачи обновлён\n\n"
         f"{client_line}"
-        f"Задача: {task['task_text'][:80]}\n"
+        f"Задача: {task['task_text']}\n"
         f"Статус: {label}\n"
         f"От: {worker_name}"
     )

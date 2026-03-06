@@ -639,7 +639,7 @@ async def api_task_status(data: TaskStatusInput, request: Request):
     target = task.get("reply_to_chat_id") or TELEGRAM_CHAT_ID
     send_telegram(
         f"📋 Статус задачи обновлён\n\n{client_line}"
-        f"Задача: {task['task_text'][:80]}\n"
+        f"Задача: {task['task_text']}\n"
         f"Статус: {label}\n"
         f"От: {user['name']}",
         target,

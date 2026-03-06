@@ -210,7 +210,7 @@ def send_task_status_to_recipient(chat_id: str, task_id: int, task: dict, status
     msg = (
         f"📋 Статус задачи: {label}\n\n"
         f"{client_line}"
-        f"Задача: {task.get('task_text', '')[:80]}\n\n"
+        f"Задача: {task.get('task_text', '')}\n\n"
         f"Статус изменён: {worker_name}"
     )
     role = task.get("role", "")
