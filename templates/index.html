@@ -1212,8 +1212,13 @@
                     method: 'POST',
                     body: formData
                 });
-                const d = await resp.json();
-                if (!resp.ok) throw new Error(d.detail || 'Ошибка');
+                let d;
+                try {
+                    d = await resp.json();
+                } catch (e) {
+                    throw new Error('Сервер вернул неверный ответ. Проверьте логи: journalctl -u integra-sales -n 30');
+                }
+                if (!resp.ok) throw new Error(d.detail || d.error || 'Ошибка');
                 if (!d.ok) {
                     const msg = d.error || 'Не удалось отправить. Попросите инженера написать боту /start.';
                     throw new Error(msg);

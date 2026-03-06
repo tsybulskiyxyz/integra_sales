@@ -783,7 +783,7 @@ async def api_send_task(
     task: str = Form(...),
     role: str = Form(...),
     recipient_telegram_id: Optional[str] = Form(None),
-    files: list[UploadFile] = File(default=[]),
+    files: list[UploadFile] = File(default=None),
 ):
     user = _require_user(request)
     if user.get("role") not in MANAGER_ROLES:
@@ -806,6 +806,7 @@ async def api_send_task(
             task_id = save_task_message(tg_msg_id, chat_id, phone, role, task)
             if task_id:
                 add_task_status_keyboard(chat_id, tg_msg_id, task_id, role)
+    files = files or []
     if ok and files:
         for file in files:
             if not file or not file.filename:
