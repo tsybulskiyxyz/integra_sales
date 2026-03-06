@@ -783,45 +783,53 @@ async def api_send_task(
     task: str = Form(...),
     role: str = Form(...),
     recipient_telegram_id: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
+    files: list[UploadFile] | None = File(None),
 ):
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Доступ только для менеджера")
-    chat_id = recipient_telegram_id
-    if not chat_id:
-        contacts = get_contacts_by_role(role)
-        if not contacts:
-            raise HTTPException(400, f"Нет контактов с ролью {role}")
-        chat_id = contacts[0].get("telegram_id")
-    if not chat_id:
-        raise HTTPException(400, "Укажите telegram_id получателя или добавьте контакт")
-    events = get_events(phone, limit=5)
-    result = send_task_to_role(role, object_info, task, chat_id, events=events)
-    ok = not (isinstance(result, dict) and "_error" in result) and bool(result)
-    err_msg = result.get("_error") if isinstance(result, dict) and "_error" in result else None
-    if ok and isinstance(result, dict) and "_error" not in result:
-        tg_msg_id = result.get("message_id")
-        if tg_msg_id:
-            task_id = save_task_message(tg_msg_id, chat_id, phone, role, task)
-            if task_id:
-                add_task_status_keyboard(chat_id, tg_msg_id, task_id, role)
-    if ok and file and file.filename:
-        content = await file.read()
-        if content:
-            if len(content) > 10 * 1024 * 1024:  # 10 MB
-                raise HTTPException(400, "Файл не более 10 МБ")
-            fn = file.filename or "file"
-            is_image = fn.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
-            if is_image:
-                send_photo(chat_id, content, "📎 Файл к задаче")
-            else:
-                send_document(chat_id, content, fn, "📎 Файл к задаче")
-    if ok:
-        add_event(phone, "task_sent", f"Задача ({role}): {task}", None)
-    if err_msg and "can't initiate conversation" in (err_msg or "").lower():
-        err_msg = "Получатель не писал боту /start. Попросите инженера открыть бота и отправить /start."
-    return {"ok": ok, "error": err_msg}
+    try:
+        user = _require_user(request)
+        if user.get("role") not in MANAGER_ROLES:
+            raise HTTPException(403, "Доступ только для менеджера")
+        chat_id = recipient_telegram_id
+        if not chat_id:
+            contacts = get_contacts_by_role(role)
+            if not contacts:
+                raise HTTPException(400, f"Нет контактов с ролью {role}")
+            chat_id = contacts[0].get("telegram_id")
+        if not chat_id:
+            raise HTTPException(400, "Укажите telegram_id получателя или добавьте контакт")
+        events = get_events(phone, limit=5)
+        result = send_task_to_role(role, object_info, task, chat_id, events=events)
+        ok = not (isinstance(result, dict) and "_error" in result) and bool(result)
+        err_msg = result.get("_error") if isinstance(result, dict) and "_error" in result else None
+        if ok and isinstance(result, dict) and "_error" not in result:
+            tg_msg_id = result.get("message_id")
+            if tg_msg_id:
+                task_id = save_task_message(tg_msg_id, chat_id, phone, role, task)
+                if task_id:
+                    add_task_status_keyboard(chat_id, tg_msg_id, task_id, role)
+        if ok:
+            for f in (files or []):
+                if not f or not f.filename:
+                    continue
+                content = await f.read()
+                if content:
+                    if len(content) > 10 * 1024 * 1024:
+                        raise HTTPException(400, f"Файл {f.filename} не более 10 МБ")
+                    fn = f.filename or "file"
+                    is_image = fn.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp"))
+                    if is_image:
+                        send_photo(chat_id, content, "📎 Файл к задаче")
+                    else:
+                        send_document(chat_id, content, fn, "📎 Файл к задаче")
+        if ok:
+            add_event(phone, "task_sent", f"Задача ({role}): {task}", None)
+        if err_msg and "can't initiate conversation" in (err_msg or "").lower():
+            err_msg = "Получатель не писал боту /start. Попросите инженера открыть бота и отправить /start."
+        return {"ok": ok, "error": err_msg}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
 
 
 if __name__ == "__main__":
