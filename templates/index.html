@@ -653,6 +653,7 @@
         ];
 
         const FUNNEL_STAGES = [
+            { key: 'total', label: 'Всего', color: 'var(--accent)' },
             { key: 'first_contact', label: 'Первый контакт', color: 'var(--accent)' },
             { key: 'negotiation', label: 'Переговоры', color: 'var(--orange)' },
             { key: 'waiting', label: 'Ушли в долгое ожидание', color: '#6b9fff' },
@@ -669,7 +670,9 @@
                 proposal_sent: s.proposal_sent || 0,
                 closed: s.closed || 0,
             };
-            const totalQualified = counts.first_contact || 1;
+            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.rejected || 0);
+            counts.total = total;
+            const totalQualified = total || 1;
             const wrap = document.getElementById('funnelWrap');
             wrap.innerHTML = FUNNEL_STAGES.map((s, i) => {
                 const cnt = counts[s.key];
