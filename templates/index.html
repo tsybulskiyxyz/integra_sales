@@ -671,7 +671,6 @@
             };
             const totalQualified = counts.first_contact || 1;
             const wrap = document.getElementById('funnelWrap');
-            const totalQualified = counts.first_contact;
             wrap.innerHTML = FUNNEL_STAGES.map((s, i) => {
                 const cnt = counts[s.key];
                 const conv = i > 0 && totalQualified > 0 ? Math.round(cnt / totalQualified * 100) : 0;
