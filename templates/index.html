@@ -654,6 +654,7 @@
             { key: 'waiting', label: 'Ушли в долгое ожидание' },
             { key: 'proposal_sent', label: 'Выслано КП' },
             { key: 'closed', label: 'Закрыт' },
+            { key: 'contractors', label: 'Подрядчики' },
             { key: 'rejected', label: 'Отказ' },
             { key: 'low_interest', label: 'Не особо интересно' },
         ];
@@ -675,8 +676,9 @@
                 waiting: s.waiting || 0,
                 proposal_sent: s.proposal_sent || 0,
                 closed: s.closed || 0,
+                contractors: s.contractors || 0,
             };
-            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.rejected || 0) + (s.low_interest || 0);
+            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.contractors || 0) + (s.rejected || 0) + (s.low_interest || 0);
             counts.total = total;
             const totalQualified = total || 1;
             const wrap = document.getElementById('funnelWrap');
@@ -924,6 +926,10 @@
                         <div class="dash-summary-label">Закрыто</div>
                     </div>
                     <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:#7dd3fc">${s.contractors || 0}</div>
+                        <div class="dash-summary-label">Подрядчики</div>
+                    </div>
+                    <div class="dash-summary-item">
                         <div class="dash-summary-val" style="color:var(--red)">${s.rejected || 0}</div>
                         <div class="dash-summary-label">Отказ</div>
                     </div>
@@ -1066,6 +1072,7 @@
                                         <option value="waiting" ${r.local_status==='waiting'?'selected':''}>Ушли в долгое ожидание</option>
                                         <option value="proposal_sent" ${r.local_status==='proposal_sent'?'selected':''}>Выслано КП</option>
                                         <option value="closed" ${r.local_status==='closed'?'selected':''}>Закрыт</option>
+                                        <option value="contractors" ${r.local_status==='contractors'?'selected':''}>Подрядчики</option>
                                         <option value="rejected" ${r.local_status==='rejected'?'selected':''}>Отказ</option>
                                         <option value="low_interest" ${r.local_status==='low_interest'?'selected':''}>Не особо интересно</option>
                                     </select>
@@ -1427,7 +1434,7 @@
         }
 
         const roleLabels = { sales_manager: 'Менеджер по продажам', estimator: 'Сметчица', engineer: 'Инженер', sales_head: 'Руководитель ОП', test: 'Тест' };
-        const statusLabelsRu = { first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание', proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ', low_interest: 'Не особо интересно' };
+        const statusLabelsRu = { first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание', proposal_sent: 'Выслано КП', closed: 'Закрыт', contractors: 'Подрядчики', rejected: 'Отказ', low_interest: 'Не особо интересно' };
 
         function exportCSV() {
             const BOM = '\uFEFF';

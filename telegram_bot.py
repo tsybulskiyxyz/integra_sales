@@ -12,6 +12,7 @@ STATUS_LABELS = {
     "waiting": "Ушли в долгое ожидание",
     "proposal_sent": "Выслано КП",
     "closed": "Закрыт",
+    "contractors": "Подрядчики",
     "rejected": "Отказ",
     "low_interest": "Не особо интересно",
 }

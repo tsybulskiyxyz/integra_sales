@@ -397,8 +397,9 @@ async def get_data():
             extra = {}
         local_status = extra.get("local_status", "first_contact")
         max_rank = max_stages.get((r.phone, r.row_index), 0)
-        current_rank = {"first_contact": 0, "negotiation": 1, "waiting": 2, "proposal_sent": 3, "closed": 4}.get(local_status, 0)
-        best_rank = max(max_rank, current_rank)
+        current_rank = {"first_contact": 0, "negotiation": 1, "waiting": 2, "proposal_sent": 3, "closed": 4}.get(local_status, -1)
+        best_rank = max(max_rank, current_rank) if current_rank >= 0 else max_rank
+        max_stage = "contractors" if local_status == "contractors" else stage_names.get(best_rank, "first_contact")
         out_rows.append({
             "row_index": r.row_index,
             "phone": r.phone,
@@ -407,7 +408,7 @@ async def get_data():
             "last_activity": last_activity_map.get(key),
             "econom_number": extra.get("econom_number", ""),
             "local_status": local_status,
-            "max_stage": stage_names.get(best_rank, "first_contact"),
+            "max_stage": max_stage,
             "object_address": extra.get("object_address", ""),
             "object_area": extra.get("object_area", ""),
             "object_budget": extra.get("object_budget", ""),
@@ -466,6 +467,7 @@ STATUS_LABELS = {
     "waiting": "Ушли в долгое ожидание",
     "proposal_sent": "Выслано КП",
     "closed": "Закрыт",
+    "contractors": "Подрядчики",
     "rejected": "Отказ",
     "low_interest": "Не особо интересно",
 }

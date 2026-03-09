@@ -464,7 +464,7 @@ def get_max_stages() -> dict[tuple[str, int], int]:
         for phone, sheet_row, local_status in extras_rows:
             key = (phone, sheet_row)
             rank = STAGE_RANK.get(local_status, 0)
-            if local_status not in ("rejected", "low_interest"):
+            if local_status not in ("rejected", "low_interest", "contractors"):
                 result[key] = max(result.get(key, 0), rank)
         return result
     finally:
