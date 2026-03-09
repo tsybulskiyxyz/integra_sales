@@ -467,6 +467,7 @@ STATUS_LABELS = {
     "proposal_sent": "Выслано КП",
     "closed": "Закрыт",
     "rejected": "Отказ",
+    "low_interest": "Не особо интересно",
 }
 
 

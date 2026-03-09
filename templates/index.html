@@ -650,6 +650,7 @@
             { key: 'proposal_sent', label: 'Выслано КП' },
             { key: 'closed', label: 'Закрыт' },
             { key: 'rejected', label: 'Отказ' },
+            { key: 'low_interest', label: 'Не особо интересно' },
         ];
 
         const FUNNEL_STAGES = [
@@ -921,6 +922,10 @@
                         <div class="dash-summary-val" style="color:var(--red)">${s.rejected || 0}</div>
                         <div class="dash-summary-label">Отказ</div>
                     </div>
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:var(--muted)">${s.low_interest || 0}</div>
+                        <div class="dash-summary-label">Не особо интересно</div>
+                    </div>
                 </div>
                 <div style="margin-top:1rem">
                     <button onclick="sendWeeklyReport()" class="btn-purple" style="padding:0.4rem 0.8rem;font-size:0.85rem">Получить отчёт за неделю (на проверку)</button>
@@ -1057,6 +1062,7 @@
                                         <option value="proposal_sent" ${r.local_status==='proposal_sent'?'selected':''}>Выслано КП</option>
                                         <option value="closed" ${r.local_status==='closed'?'selected':''}>Закрыт</option>
                                         <option value="rejected" ${r.local_status==='rejected'?'selected':''}>Отказ</option>
+                                        <option value="low_interest" ${r.local_status==='low_interest'?'selected':''}>Не особо интересно</option>
                                     </select>
                                 </td>
                                 <td class="actions-cell">
@@ -1378,7 +1384,7 @@
         }
 
         const roleLabels = { sales_manager: 'Менеджер по продажам', estimator: 'Сметчица', engineer: 'Инженер', sales_head: 'Руководитель ОП', test: 'Тест' };
-        const statusLabelsRu = { first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание', proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ' };
+        const statusLabelsRu = { first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание', proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ', low_interest: 'Не особо интересно' };
 
         function exportCSV() {
             const BOM = '\uFEFF';
@@ -1501,7 +1507,7 @@
 
         const clientStatusLabels = {
             first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание',
-            proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ',
+            proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ', low_interest: 'Не особо интересно',
         };
         const taskStatusLabels = { new: 'Новая', in_progress: 'В работе', done: 'Готово' };
         const taskStatusColors = { new: 'var(--accent)', in_progress: 'var(--orange)', done: 'var(--green)' };

@@ -464,7 +464,7 @@ def get_max_stages() -> dict[tuple[str, int], int]:
         for phone, sheet_row, local_status in extras_rows:
             key = (phone, sheet_row)
             rank = STAGE_RANK.get(local_status, 0)
-            if local_status != "rejected":
+            if local_status not in ("rejected", "low_interest"):
                 result[key] = max(result.get(key, 0), rank)
         return result
     finally:
@@ -702,7 +702,7 @@ def get_inactive_clients(days: int = 3) -> list[dict]:
                    MAX(e.created_at) as last_activity
             FROM row_extras re
             LEFT JOIN events e ON e.phone = re.phone
-            WHERE re.local_status NOT IN ('closed', 'rejected')
+            WHERE re.local_status NOT IN ('closed', 'rejected', 'low_interest')
             GROUP BY re.phone, re.sheet_row
             HAVING last_activity IS NULL OR last_activity < ?
         """, (cutoff,)).fetchall()
