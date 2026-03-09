@@ -671,7 +671,7 @@
                 proposal_sent: s.proposal_sent || 0,
                 closed: s.closed || 0,
             };
-            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.rejected || 0);
+            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.rejected || 0) + (s.low_interest || 0);
             counts.total = total;
             const totalQualified = total || 1;
             const wrap = document.getElementById('funnelWrap');
