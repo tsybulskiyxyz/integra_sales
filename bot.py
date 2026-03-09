@@ -143,11 +143,13 @@ async def handle_worker_reply(message: Message):
     if reply_to and reply_to != TELEGRAM_CHAT_ID and isinstance(result, dict) and result.get("message_id"):
         parent = get_task_by_id(task_info["parent_task_id"]) if task_info.get("parent_task_id") else None
         recipient_role = parent["role"] if parent else ("estimator" if task_info.get("role") == "engineer" else "engineer")
-        save_task_message(
+        task_id = save_task_message(
             result["message_id"], reply_to, task_info["phone"], recipient_role,
             f"Ответ от {worker_name}: {text[:100]}",
             parent_task_id=task_info.get("id"),
         )
+        if task_id:
+            add_task_status_keyboard(reply_to, result["message_id"], task_id, recipient_role)
     add_event(
         task_info["phone"],
         "worker_reply",
@@ -196,7 +198,7 @@ async def handle_worker_file(message: Message):
     add_event(
         task_info["phone"],
         "worker_reply",
-        f"Файл от {worker_name}" + (f": {caption[:50]}…" if len(caption) > 50 else (f": {caption}" if caption else "")),
+        f"Файл от {worker_name}" + (f": {caption}" if caption else ""),
     )
 
 

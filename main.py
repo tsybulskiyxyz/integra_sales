@@ -574,6 +574,27 @@ async def api_all_tasks(request: Request):
     return {"tasks": tasks, "count": len(tasks)}
 
 
+@app.get("/api/task/{task_id}/forward-context")
+async def api_task_forward_context(task_id: int, request: Request):
+    """Контекст для «Отправить сметчице»: задача + последний ответ сотрудника (аудит)."""
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Доступ только для менеджера")
+    task = get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(404, "Задача не найдена")
+    events = get_events(task["phone"], limit=30)
+    last_reply = None
+    for e in events:
+        if e.get("type") == "worker_reply":
+            last_reply = e.get("description", "")
+            break
+    return {
+        "task": task,
+        "last_worker_reply": last_reply or "",
+    }
+
+
 @app.delete("/api/task/{task_id}")
 async def api_delete_task(task_id: int, request: Request):
     """Удалить задачу (только менеджер)."""

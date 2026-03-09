@@ -590,9 +590,11 @@
 
     <div id="taskModal" class="modal">
         <div class="modal-content">
-            <h3>📋 Отправить задачу</h3>
+            <h3 id="taskModalTitle">📋 Отправить задачу</h3>
+            <p id="taskModalHint" style="display:none;color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Текст аудита от инженера подставлен ниже. Прикрепите файл (сохраните из Telegram) и отправьте сметчице.</p>
             <input type="hidden" id="taskPhone">
             <input type="hidden" id="taskRowIdx">
+            <input type="hidden" id="taskClientName" value="">
             <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.85rem;">
                 <span style="color:var(--muted)">Клиент:</span> <span id="taskClientInfo" style="color:var(--accent)"></span>
             </div>
@@ -607,7 +609,7 @@
                 <textarea id="taskText" rows="3" placeholder="Что нужно сделать..." style="width:100%"></textarea>
             </div>
             <div class="form-row" style="flex-direction:column;align-items:stretch">
-                <label style="color:var(--muted);font-size:0.8rem">Прикрепить файлы (опционально, можно несколько):</label>
+                <label style="color:var(--muted);font-size:0.8rem">Прикрепить файлы (опционально, можно несколько). При отправке аудита сметчице — прикрепите файл из Telegram.</label>
                 <input type="file" id="taskFile" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple style="font-size:0.85rem">
             </div>
             <div class="form-row" style="justify-content:flex-end;gap:0.5rem">
@@ -1167,6 +1169,7 @@
             const r = rowsData[idx];
             document.getElementById('taskPhone').value = r.phone;
             document.getElementById('taskRowIdx').value = idx;
+            document.getElementById('taskClientName').value = r.econom_number || '';
             const name = r.econom_number || '—';
             document.getElementById('taskClientInfo').textContent = `${r.phone}${name !== '—' ? ' / ' + name : ''}`;
             document.getElementById('taskText').value = '';
@@ -1181,12 +1184,48 @@
                     }
                 });
             } catch(e) {}
+            document.getElementById('taskModalTitle').textContent = '📋 Отправить задачу';
+            document.getElementById('taskModalHint').style.display = 'none';
             document.getElementById('taskModal').classList.add('show');
         }
         function closeTaskModal() {
             document.getElementById('taskModal').classList.remove('show');
             const fi = document.getElementById('taskFile');
             if (fi) fi.value = '';
+            document.getElementById('taskRowIdx').value = '';
+            document.getElementById('taskClientName').value = '';
+            document.getElementById('taskModalTitle').textContent = '📋 Отправить задачу';
+            document.getElementById('taskModalHint').style.display = 'none';
+        }
+
+        async function openTaskModalFromTask(taskId) {
+            try {
+                const r = await fetch('/api/task/' + taskId + '/forward-context');
+                if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
+                const d = await r.json();
+                const task = d.task || {};
+                const reply = (d.last_worker_reply || '').trim();
+                document.getElementById('taskPhone').value = task.phone || '';
+                document.getElementById('taskRowIdx').value = '-1';
+                document.getElementById('taskClientName').value = task.client_name || '';
+                const name = task.client_name || '—';
+                document.getElementById('taskClientInfo').textContent = `${task.phone || ''}${name !== '—' ? ' / ' + name : ''}`;
+                document.getElementById('taskText').value = reply ? (reply.startsWith('Ответ от') || reply.startsWith('Файл от') ? reply : `Аудит от инженера:\n${reply}`) : '';
+                const sel = document.getElementById('taskRecipient');
+                sel.innerHTML = '<option value="">Выберите получателя</option>';
+                const resp = await fetch('/api/contacts');
+                const cd = await resp.json();
+                const estimatorFirst = (cd.contacts || []).find(c => c.role === 'estimator' && c.telegram_id);
+                (cd.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        const selected = c.role === 'estimator' && c.telegram_id === (estimatorFirst?.telegram_id) ? ' selected' : '';
+                        sel.innerHTML += `<option value="${c.telegram_id}" data-role="${c.role}"${selected}>${c.name} — ${roleLabels[c.role] || c.role}</option>`;
+                    }
+                });
+                document.getElementById('taskModalTitle').textContent = '📤 Отправить аудит сметчице';
+                document.getElementById('taskModalHint').style.display = reply ? 'block' : 'none';
+                document.getElementById('taskModal').classList.add('show');
+            } catch (e) { alert(e.message || 'Ошибка'); }
         }
 
         async function sendTask() {
@@ -1199,8 +1238,9 @@
             if (!tgId) { alert('Выберите получателя'); return; }
             if (!task.trim()) { alert('Укажите задачу'); return; }
             const idx = +document.getElementById('taskRowIdx').value;
-            const r = rowsData[idx];
-            const name = r?.econom_number || '';
+            const clientName = document.getElementById('taskClientName')?.value || '';
+            const r = idx >= 0 ? rowsData[idx] : null;
+            const name = r?.econom_number || clientName || '';
             const objectInfo = `Контакт: ${phone}${name ? '\nИмя: ' + name : ''}`;
             const fileInput = document.getElementById('taskFile');
             const formData = new FormData();
@@ -1549,12 +1589,15 @@
                             <option value="in_progress" ${t.status==='in_progress'?'selected':''}>В работе</option>
                             <option value="done" ${t.status==='done'?'selected':''}>Готово</option>
                         </select>`;
+                        const forwardBtn = ((t.role === 'engineer' || t.role === 'test') && t.status === 'done')
+                            ? `<button onclick="openTaskModalFromTask(${t.id})" class="btn-purple" style="padding:0.2rem 0.5rem;font-size:0.75rem;margin-right:0.3rem" title="Отправить аудит сметчице">📤 Сметчице</button>`
+                            : '';
                         return `<tr><td>${t.recipient_name}<br><span style="color:var(--muted);font-size:0.7rem">${roleLabel}</span></td>
                             <td>${client}<a href="#" onclick="openTimeline('${t.phone}');return false" class="task-client-link" title="Карточка клиента">📋</a></td>
                             <td class="task-cell" style="max-width:220px;min-width:180px">${taskCell}</td>
                             <td>${statusSelect}</td>
                             <td class="date-cell">${date}</td>
-                            <td style="padding-left:2rem"><button onclick="managerDeleteTask(${t.id})" class="btn-red tasks-del-btn" title="Удалить">✕</button></td></tr>`;
+                            <td style="padding-left:2rem">${forwardBtn}<button onclick="managerDeleteTask(${t.id})" class="btn-red tasks-del-btn" title="Удалить">✕</button></td></tr>`;
                     }).join('')}</tbody></table>`;
             } catch (e) {
                 wrap.innerHTML = `<p style="color:var(--red)">${e.message || 'Ошибка загрузки'}</p>`;
