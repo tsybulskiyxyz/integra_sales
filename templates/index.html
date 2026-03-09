@@ -160,12 +160,13 @@
         .tasks-table th:nth-child(1), .tasks-table td:nth-child(1) { width: 10rem; }
         .tasks-table th:nth-child(2), .tasks-table td:nth-child(2) { width: 12rem; }
         .tasks-table th:nth-child(3), .tasks-table td:nth-child(3) { width: auto; min-width: 200px; }
-        .tasks-table th:nth-child(4), .tasks-table td:nth-child(4) { width: 8rem; }
+        .tasks-table th:nth-child(4), .tasks-table td:nth-child(4) { width: 9rem; }
         .tasks-table th:nth-child(5), .tasks-table td:nth-child(5) { width: 7rem; padding-right: 0.75rem; white-space: nowrap; }
-        .tasks-table th:nth-child(6), .tasks-table td:nth-child(6) { width: 8rem; min-width: 7rem; padding-left: 0.75rem; padding-right: 0.5rem; text-align: left; }
+        .tasks-table th:nth-child(6), .tasks-table td:nth-child(6) { width: 4rem; min-width: 3rem; padding-left: 0.75rem; padding-right: 0.5rem; text-align: left; }
         .tasks-table .tasks-del-btn { min-width: 1.5rem; width: 1.5rem; height: 1.5rem; padding: 0; font-size: 0.75rem; line-height: 1; }
         .tasks-table .tasks-actions-cell { display: flex; align-items: center; gap: 0.4rem; padding-left: 0.75rem !important; }
-        .tasks-table .btn-forward { padding: 0.4rem 0.65rem; font-size: 0.8rem; line-height: 1.3; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.35rem; }
+        .tasks-table .tasks-status-cell { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+        .tasks-table .btn-forward { padding: 0.35rem 0.6rem; font-size: 0.75rem; line-height: 1.2; white-space: nowrap; display: inline-flex; align-items: center; gap: 0.3rem; }
         .task-cell-expand { cursor: pointer; color: var(--muted); font-size: 0.7rem; margin-left: 0.3rem; }
         .task-cell-expand:hover { color: var(--accent); }
         .task-full { white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
@@ -1586,7 +1587,7 @@
                             ? `<span class="task-short">${taskShort}</span><span class="task-full" style="display:none">${taskText}</span>
                                <a href="#" onclick="toggleTaskExpand(this);return false" class="task-cell-expand">развернуть</a>`
                             : taskText;
-                        const statusSelect = `<select onchange="managerSetTaskStatus(${t.id}, this.value)" style="font-size:0.75rem;padding:0.2rem;background:#111;border:1px solid #333;color:${stColor}">
+                        const statusSelect = `<select onchange="managerSetTaskStatus(${t.id}, this.value)" style="font-size:0.75rem;padding:0.25rem 0.4rem;background:#111;border:1px solid #333;color:${stColor};min-width:6rem">
                             <option value="new" ${t.status==='new'?'selected':''}>Новая</option>
                             <option value="in_progress" ${t.status==='in_progress'?'selected':''}>В работе</option>
                             <option value="done" ${t.status==='done'?'selected':''}>Готово</option>
@@ -1594,12 +1595,13 @@
                         const forwardBtn = ((t.role === 'engineer' || t.role === 'test') && t.status === 'done')
                             ? `<button onclick="openTaskModalFromTask(${t.id})" class="btn-purple btn-forward" title="Отправить аудит сметчице"><span>📤</span> Сметчице</button>`
                             : '';
+                        const statusCell = `<div class="tasks-status-cell">${statusSelect}${forwardBtn}</div>`;
                         return `<tr><td>${t.recipient_name}<br><span style="color:var(--muted);font-size:0.7rem">${roleLabel}</span></td>
                             <td>${client}<a href="#" onclick="openTimeline('${t.phone}');return false" class="task-client-link" title="Карточка клиента">📋</a></td>
                             <td class="task-cell" style="max-width:220px;min-width:180px">${taskCell}</td>
-                            <td>${statusSelect}</td>
+                            <td>${statusCell}</td>
                             <td class="date-cell">${date}</td>
-                            <td class="tasks-actions-cell">${forwardBtn}<button onclick="managerDeleteTask(${t.id})" class="btn-red tasks-del-btn" title="Удалить">✕</button></td></tr>`;
+                            <td class="tasks-actions-cell"><button onclick="managerDeleteTask(${t.id})" class="btn-red tasks-del-btn" title="Удалить">✕</button></td></tr>`;
                     }).join('')}</tbody></table>`;
             } catch (e) {
                 wrap.innerHTML = `<p style="color:var(--red)">${e.message || 'Ошибка загрузки'}</p>`;
