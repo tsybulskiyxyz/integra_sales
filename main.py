@@ -418,10 +418,21 @@ async def get_data():
     total_calls = len(rows)
     avg_per_day = round(total_calls / working_days, 1) if working_days else 0
     summary = get_status_summary()
+    # Воронка: текущий статус, но proposal_sent дополняем отказавшими после КП
+    funnel_summary = dict(summary)
+    funnel_summary.setdefault("first_contact", 0)
+    funnel_summary.setdefault("negotiation", 0)
+    funnel_summary.setdefault("waiting", 0)
+    funnel_summary.setdefault("proposal_sent", 0)
+    funnel_summary.setdefault("closed", 0)
+    rejected_after_kp = sum(1 for row in out_rows if row.get("local_status") == "rejected" and row.get("max_stage") == "proposal_sent")
+    funnel_summary["proposal_sent"] = (funnel_summary.get("proposal_sent") or 0) + rejected_after_kp
+    funnel_summary["_rejected_after_kp"] = rejected_after_kp
     return {
         "rows": out_rows,
         "orange_rows": orange_rows,
         "summary": summary,
+        "funnel_summary": funnel_summary,
         "stats": {
             "total_rows": stats.total_rows,
             "red_count": stats.red_count,

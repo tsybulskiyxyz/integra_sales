@@ -643,6 +643,7 @@
         let orangeRows = [];
         let allStats = {};
         let summaryData = {};
+        let funnelSummaryData = {};
         let activeFilter = 'all';
         let activePeriod = 'all';
         let activeDateFilter = 'all';
@@ -669,18 +670,18 @@
         ];
 
         function renderFunnel() {
-            const s = summaryData;
+            const f = funnelSummaryData;
             const counts = {
-                first_contact: s.first_contact || 0,
-                negotiation: s.negotiation || 0,
-                waiting: s.waiting || 0,
-                proposal_sent: s.proposal_sent || 0,
-                closed: s.closed || 0,
-                contractors: s.contractors || 0,
+                first_contact: f.first_contact || 0,
+                negotiation: f.negotiation || 0,
+                waiting: f.waiting || 0,
+                proposal_sent: f.proposal_sent || 0,
+                closed: f.closed || 0,
             };
-            const total = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0) + (s.contractors || 0) + (s.rejected || 0) + (s.low_interest || 0);
-            counts.total = total;
-            const totalQualified = total || 1;
+            const funnelTotal = (counts.first_contact || 0) + (counts.negotiation || 0) + (counts.waiting || 0) + (counts.proposal_sent || 0) + (counts.closed || 0);
+            const rejectedAfterKp = f._rejected_after_kp || 0;
+            counts.total = funnelTotal + (summaryData.contractors || 0) + ((summaryData.rejected || 0) - rejectedAfterKp) + (summaryData.low_interest || 0);
+            const totalQualified = counts.total || 1;
             const wrap = document.getElementById('funnelWrap');
             wrap.innerHTML = FUNNEL_STAGES.map((s, i) => {
                 const cnt = counts[s.key];
@@ -975,6 +976,7 @@
                 orangeRows = data.orange_rows || [];
                 allStats = data.stats;
                 summaryData = data.summary || {};
+                funnelSummaryData = data.funnel_summary || {};
                 dataLoaded = true;
                 document.getElementById('callbackCount').textContent = `(${orangeRows.length})`;
                 document.getElementById('statsSection').style.display = 'block';
