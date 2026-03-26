@@ -109,7 +109,89 @@ def init_db():
                 expires_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
+            CREATE TABLE IF NOT EXISTS legal_leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_name TEXT NOT NULL DEFAULT '',
+                inn TEXT DEFAULT '',
+                phone TEXT DEFAULT '',
+                email TEXT DEFAULT '',
+                okved TEXT DEFAULT '',
+                region TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pool',
+                notes TEXT DEFAULT '',
+                source TEXT DEFAULT 'manual',
+                next_contact_at TEXT DEFAULT '',
+                priority INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_legal_leads_status ON legal_leads(status);
+            CREATE TABLE IF NOT EXISTS legal_lead_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lead_id INTEGER NOT NULL,
+                event_type TEXT NOT NULL DEFAULT 'note',
+                description TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_legal_lead_events_lead ON legal_lead_events(lead_id);
         """)
+        conn.commit()
+        try:
+            conn.execute("ALTER TABLE legal_leads ADD COLUMN next_contact_at TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE legal_leads ADD COLUMN priority INTEGER DEFAULT 0")
+            conn.commit()
+        except Exception:
+            pass
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS crm_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT ''
+            );
+        """)
+        conn.commit()
+        _migrate_legal_lead_statuses(conn)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _migrate_legal_lead_statuses(conn):
+    """Старые статусы воронки → база / обход / квалиф. / стоп."""
+    mapping = (
+        ("new", "pool"),
+        ("contacted", "pool"),
+        ("engaged", "outreach"),
+        ("qualified", "qualified"),
+        ("lost", "stop"),
+    )
+    for old, new in mapping:
+        conn.execute("UPDATE legal_leads SET status = ? WHERE status = ?", (new, old))
+
+
+CRM_SETTING_LEGAL_SHEET_URL = "legal_sheet_url"
+
+
+def get_crm_setting(key: str) -> str:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT value FROM crm_settings WHERE key = ?", (key,)).fetchone()
+        return (row[0] if row else "") or ""
+    finally:
+        conn.close()
+
+
+def set_crm_setting(key: str, value: str):
+    conn = get_connection()
+    try:
+        conn.execute(
+            """INSERT INTO crm_settings (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (key, value or ""),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -709,3 +791,278 @@ def get_inactive_clients(days: int = 3) -> list[dict]:
         return [{"phone": r[0], "sheet_row": r[1], "name": r[2] or "", "status": r[3], "last_activity": r[4]} for r in rows]
     finally:
         conn.close()
+
+
+LEGAL_LEAD_STATUSES = ("pool", "outreach", "qualified", "stop")
+
+
+def _legal_touch_updated(conn, lead_id: int):
+    conn.execute(
+        "UPDATE legal_leads SET updated_at = ? WHERE id = ?",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), lead_id),
+    )
+    conn.commit()
+
+
+def _legal_row_from_sql(r: tuple) -> dict:
+    return {
+        "id": r[0],
+        "company_name": r[1] or "",
+        "inn": r[2] or "",
+        "phone": r[3] or "",
+        "email": r[4] or "",
+        "okved": r[5] or "",
+        "region": r[6] or "",
+        "status": r[7] or "pool",
+        "notes": r[8] or "",
+        "source": r[9] or "",
+        "next_contact_at": r[10] or "",
+        "priority": int(r[11] or 0),
+        "created_at": r[12],
+        "updated_at": r[13],
+    }
+
+
+def legal_leads_list(
+    status_filter: Optional[str] = None,
+    due_only: bool = False,
+) -> list[dict]:
+    conn = get_connection()
+    try:
+        q = """SELECT id, company_name, inn, phone, email, okved, region, status, notes, source,
+                      next_contact_at, priority, created_at, updated_at FROM legal_leads"""
+        params: tuple = ()
+        if status_filter and status_filter in LEGAL_LEAD_STATUSES:
+            q += " WHERE status = ?"
+            params = (status_filter,)
+        q += " ORDER BY priority DESC, updated_at DESC"
+        rows = conn.execute(q, params).fetchall()
+        out = [_legal_row_from_sql(r) for r in rows]
+    finally:
+        conn.close()
+    if due_only:
+        today = datetime.now().strftime("%Y-%m-%d")
+        out = [
+            r
+            for r in out
+            if r["status"] != "stop"
+            and r.get("next_contact_at")
+            and (r["next_contact_at"][:10] <= today)
+        ]
+    return out
+
+
+def legal_lead_find_id_by_inn(inn: str) -> Optional[int]:
+    if not inn or not str(inn).strip():
+        return None
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT id FROM legal_leads WHERE inn = ?", (str(inn).strip(),)).fetchone()
+        return int(row[0]) if row else None
+    finally:
+        conn.close()
+
+
+def legal_lead_summary() -> dict[str, int]:
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT status, COUNT(*) FROM legal_leads GROUP BY status").fetchall()
+        out = {s: 0 for s in LEGAL_LEAD_STATUSES}
+        for st, cnt in rows:
+            if st in out:
+                out[st] = cnt
+        total_row = conn.execute("SELECT COUNT(*) FROM legal_leads").fetchone()
+        out["total"] = int(total_row[0]) if total_row else sum(out.values())
+        return out
+    finally:
+        conn.close()
+
+
+def legal_lead_create(
+    company_name: str,
+    inn: str = "",
+    phone: str = "",
+    email: str = "",
+    okved: str = "",
+    region: str = "",
+    source: str = "manual",
+    status: str = "pool",
+    next_contact_at: str = "",
+    priority: int = 0,
+) -> int:
+    if status not in LEGAL_LEAD_STATUSES:
+        status = "pool"
+    p = max(0, min(2, int(priority)))
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """INSERT INTO legal_leads (company_name, inn, phone, email, okved, region, status, source, next_contact_at, priority)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                company_name.strip(),
+                inn.strip(),
+                phone.strip(),
+                email.strip(),
+                okved.strip(),
+                region.strip(),
+                status,
+                source,
+                (next_contact_at or "").strip(),
+                p,
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+    finally:
+        conn.close()
+
+
+def legal_lead_get(lead_id: int) -> Optional[dict]:
+    conn = get_connection()
+    try:
+        r = conn.execute(
+            """SELECT id, company_name, inn, phone, email, okved, region, status, notes, source,
+                      next_contact_at, priority, created_at, updated_at
+               FROM legal_leads WHERE id = ?""",
+            (lead_id,),
+        ).fetchone()
+        if not r:
+            return None
+        return _legal_row_from_sql(r)
+    finally:
+        conn.close()
+
+
+def legal_lead_update(
+    lead_id: int,
+    company_name: Optional[str] = None,
+    inn: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    okved: Optional[str] = None,
+    region: Optional[str] = None,
+    status: Optional[str] = None,
+    notes: Optional[str] = None,
+    next_contact_at: Optional[str] = None,
+    priority: Optional[int] = None,
+) -> bool:
+    row = legal_lead_get(lead_id)
+    if not row:
+        return False
+    new_status = row["status"] if status is None else status
+    if new_status not in LEGAL_LEAD_STATUSES:
+        new_status = row["status"]
+    nc = row["next_contact_at"] if next_contact_at is None else (next_contact_at or "").strip()
+    pr = row["priority"] if priority is None else max(0, min(2, int(priority)))
+    conn = get_connection()
+    try:
+        conn.execute(
+            """UPDATE legal_leads SET
+               company_name = ?, inn = ?, phone = ?, email = ?, okved = ?, region = ?,
+               status = ?, notes = ?, next_contact_at = ?, priority = ?,
+               updated_at = ?
+               WHERE id = ?""",
+            (
+                (company_name if company_name is not None else row["company_name"]).strip(),
+                (inn if inn is not None else row["inn"]).strip(),
+                (phone if phone is not None else row["phone"]).strip(),
+                (email if email is not None else row["email"]).strip(),
+                (okved if okved is not None else row["okved"]).strip(),
+                (region if region is not None else row["region"]).strip(),
+                new_status,
+                (notes if notes is not None else row["notes"]).strip(),
+                nc,
+                pr,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                lead_id,
+            ),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def legal_lead_add_event(lead_id: int, description: str, event_type: str = "note") -> bool:
+    if not legal_lead_get(lead_id):
+        return False
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO legal_lead_events (lead_id, event_type, description) VALUES (?, ?, ?)",
+            (lead_id, event_type, description.strip()),
+        )
+        _legal_touch_updated(conn, lead_id)
+        return True
+    finally:
+        conn.close()
+
+
+def legal_lead_events(lead_id: int, limit: int = 50) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT id, event_type, description, created_at FROM legal_lead_events
+               WHERE lead_id = ? ORDER BY created_at DESC LIMIT ?""",
+            (lead_id, limit),
+        ).fetchall()
+        return [{"id": r[0], "type": r[1], "description": r[2], "created_at": r[3]} for r in rows]
+    finally:
+        conn.close()
+
+
+def _nz(s: Optional[str]) -> Optional[str]:
+    t = (s or "").strip()
+    return t if t else None
+
+
+def legal_import_upsert_row(
+    company_name: str,
+    inn: str = "",
+    phone: str = "",
+    email: str = "",
+    okved: str = "",
+    region: str = "",
+    source: str = "import",
+    next_contact_at: str = "",
+    priority: int = 0,
+) -> tuple[str, int]:
+    """created | updated | skipped, lead_id (-1 если skipped)."""
+    cn = (company_name or "").strip()
+    if not cn:
+        return "skipped", -1
+    inn = (inn or "").strip()
+    pr = max(0, min(2, int(priority or 0)))
+    nc_raw = (next_contact_at or "").strip()
+    eid = legal_lead_find_id_by_inn(inn) if inn else None
+    if eid:
+        old = legal_lead_get(eid)
+        if not old:
+            return "skipped", -1
+        legal_lead_update(
+            eid,
+            company_name=cn,
+            inn=inn or old["inn"],
+            phone=_nz(phone),
+            email=_nz(email),
+            okved=_nz(okved),
+            region=_nz(region),
+            next_contact_at=nc_raw if nc_raw else None,
+            priority=pr,
+        )
+        legal_lead_add_event(eid, f"Импорт: обновление по ИНН (источник {source})", "system")
+        return "updated", eid
+    nid = legal_lead_create(
+        cn,
+        inn,
+        phone or "",
+        email or "",
+        okved or "",
+        region or "",
+        source,
+        "pool",
+        nc_raw,
+        pr,
+    )
+    legal_lead_add_event(nid, f"Импорт ({source})", "system")
+    return "created", nid

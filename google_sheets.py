@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from config import GOOGLE_CREDENTIALS_PATH, GOOGLE_SHEET_URL
+from legal_sync import legal_row_from_sheet_rev, normalize_legal_header
 from models import CallRow, RowStatus
 
 
@@ -218,4 +219,43 @@ def debug_colors(sheet_url: Optional[str] = None, max_rows: int = 15) -> list[di
                 out.append({"row": idx + 1, "bg": bg, "status": str(status)})
             else:
                 out.append({"row": idx + 1, "bg": None, "status": "empty"})
+    return out
+
+
+def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
+    """
+    Первая строка листа — заголовки (как в CSV: компания, ИНН, телефон, email, ОКВЭД, регион…).
+    Дальше строки с данными. Пустые и без названия компании пропускаются.
+    """
+    if not sheet_url:
+        raise ValueError("Укажите ссылку на Google таблицу (юрики)")
+    sheet_id = extract_sheet_id(sheet_url)
+    if not sheet_id:
+        raise ValueError("Некорректная ссылка на Google таблицу")
+
+    service = _get_sheets_service()
+    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    sheet_name = meta["sheets"][0]["properties"]["title"]
+
+    values_result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=f"'{sheet_name}'!A:Z",
+    ).execute()
+    data = values_result.get("values", [])
+    if len(data) < 2:
+        return []
+
+    headers = [normalize_legal_header(str(c)) for c in data[0]]
+    out: list[dict] = []
+    for row in data[1:]:
+        if not any(str(c).strip() for c in row[:6] if c):
+            continue
+        cells = [str(row[i]).strip() if i < len(row) else "" for i in range(len(headers))]
+        rev: dict[str, str] = {}
+        for i, h in enumerate(headers):
+            if h and i < len(cells):
+                rev[h] = cells[i]
+        parsed = legal_row_from_sheet_rev(rev)
+        if parsed.get("company_name"):
+            out.append(parsed)
     return out

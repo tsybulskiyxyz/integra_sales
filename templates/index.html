@@ -419,6 +419,14 @@
         {% endif %}
 
         {% if is_manager %}
+        <div class="card" style="padding:0.5rem 1rem;margin-bottom:1rem">
+            <div class="tabs" style="margin:0;padding:0;border:none">
+                <span class="tab active" id="crmTabPhysical" onclick="showCrmMode('physical', this)">Физики</span>
+                <span class="tab" id="crmTabLegal" onclick="showCrmMode('legal', this)">Юрики</span>
+                <span class="tab" id="crmTabMail" onclick="showCrmMode('mail', this)">Почта</span>
+            </div>
+        </div>
+        <div id="physicalCrmWrap">
         <div id="statsSection" class="card" style="display:none">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
                 <h3>Статистика</h3>
@@ -522,6 +530,57 @@
                     </div>
                 </div>
                 <div id="contactsList" class="team-grid"></div>
+            </div>
+        </div>
+        </div>
+
+        <div id="legalCrmWrap" style="display:none">
+            <div class="card" style="margin-bottom:1rem">
+                <h3 style="margin-bottom:0.75rem">Юрики — база и обход</h3>
+                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Таблица Google (как у физиков): вставьте ссылку → сохраните → «Загрузить из таблицы». Дальше — выгрузка телефонов в Zvonok и email в eLama для текущего списка (с учётом фильтра). Скопируйте сервисный аккаунт на таблицу. Колонки: компания, ИНН, телефон, email, ОКВЭД, регион; опционально: следующее касание, приоритет, комментарий.</p>
+                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+                    <input type="url" id="legalSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." style="flex:1;min-width:240px">
+                    <button type="button" class="btn-muted" onclick="saveLegalSheetSettings()">Сохранить ссылку</button>
+                    <button type="button" class="btn-primary" onclick="syncLegalFromSheet()">Загрузить из таблицы</button>
+                </div>
+                <p id="legalSheetMeta" style="font-size:0.75rem;color:var(--muted);margin:0 0 0.75rem"></p>
+                <div class="funnel" id="legalFunnelWrap" style="font-size:0.85rem"></div>
+                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+                    <span style="color:var(--muted);font-size:0.8rem">Интеграции (ключи в .env):</span>
+                    <input type="text" id="legalZvonokCampaign" placeholder="Zvonok campaign id (опц.)" style="min-width:10rem;max-width:14rem">
+                    <button type="button" class="btn-muted" onclick="pushLegalZvonok()">В Zvonok (тел. на экране)</button>
+                    <input type="text" id="legalElamaAudience" placeholder="eLama audience id (опц.)" style="min-width:10rem;max-width:14rem">
+                    <button type="button" class="btn-muted" onclick="pushLegalElama()">В eLama (email на экране)</button>
+                </div>
+            </div>
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+                    <input type="text" id="legalSearch" placeholder="Поиск: компания, ИНН, телефон, ОКВЭД..." style="flex:1;min-width:200px" oninput="renderLegalTable()">
+                    <a href="/api/legal/export" class="btn-muted" style="text-decoration:none;display:inline-block" id="legalExportLink">Экспорт CSV</a>
+                    <button onclick="openLegalCreateModal()" class="btn-green">+ Компания</button>
+                </div>
+                <div id="legalStatusFilters" class="filters" style="margin-bottom:0.75rem"></div>
+                <div id="legalTableWrap"></div>
+            </div>
+        </div>
+
+        <div id="mailCrmWrap" style="display:none">
+            <div class="card">
+                <h3 style="margin-bottom:0.75rem">Рассылка с вашего ящика (SMTP)</h3>
+                <p id="bulkMailHint" style="color:var(--muted);font-size:0.8rem;margin-bottom:1rem">Загрузка настроек…</p>
+                <p style="color:var(--muted);font-size:0.75rem;margin-bottom:1rem">Адреса — через запятую, пробел или с новой строки. Письма уходят по одному на адрес (получатели не видят друг друга). Пароль в .env, не в форме. Gmail — только «пароль приложения».</p>
+                <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Кому</label>
+                <textarea id="bulkMailEmails" rows="4" placeholder="client1@mail.ru&#10;client2@company.com" style="width:100%;margin-bottom:0.75rem;resize:vertical"></textarea>
+                <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Тема</label>
+                <input type="text" id="bulkMailSubject" style="width:100%;margin-bottom:0.75rem" placeholder="Тема письма">
+                <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Текст</label>
+                <textarea id="bulkMailBody" rows="8" style="width:100%;margin-bottom:0.75rem;resize:vertical" placeholder="Текст письма (простой текст)"></textarea>
+                <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Файл (необязательно)</label>
+                <input type="file" id="bulkMailFile" style="margin-bottom:1rem;font-size:0.85rem">
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+                    <button type="button" class="btn-primary" onclick="submitBulkMail()" id="bulkMailSubmit">Отправить</button>
+                    <span id="bulkMailResult" style="font-size:0.8rem;color:var(--muted)"></span>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -633,6 +692,81 @@
             <button onclick="closeTimeline()" class="btn-muted modal-close">Закрыть</button>
         </div>
     </div>
+
+    <div id="legalCreateModal" class="modal">
+        <div class="modal-content" style="max-width:480px">
+            <h3 style="margin-bottom:1rem">Новая компания (юр.)</h3>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">Название *</label>
+                <input type="text" id="legalNewName" placeholder="ООО …">
+            </div>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">ИНН</label>
+                <input type="text" id="legalNewInn" placeholder="">
+            </div>
+            <div class="form-row" style="gap:0.5rem">
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">Телефон</label>
+                    <input type="text" id="legalNewPhone">
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">Email</label>
+                    <input type="text" id="legalNewEmail">
+                </div>
+            </div>
+            <div class="form-row" style="gap:0.5rem">
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">ОКВЭД</label>
+                    <input type="text" id="legalNewOkved" placeholder="коды через запятую">
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">Регион</label>
+                    <input type="text" id="legalNewRegion">
+                </div>
+            </div>
+            <div class="form-row" style="flex-direction:column;align-items:stretch">
+                <label style="color:var(--muted);font-size:0.8rem">Источник</label>
+                <select id="legalNewSource">
+                    <option value="manual">Ручной ввод</option>
+                    <option value="okved_base">База ОКВЭД</option>
+                    <option value="tender">Тендер / закупка</option>
+                    <option value="other">Другое</option>
+                </select>
+            </div>
+            <div class="form-row" style="gap:0.5rem;align-items:flex-end">
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">След. касание</label>
+                    <input type="datetime-local" id="legalNewNextContact">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.25rem">
+                    <label style="color:var(--muted);font-size:0.8rem">Приоритет</label>
+                    <select id="legalNewPriority" style="min-width:6rem">
+                        <option value="0">Обычный</option>
+                        <option value="1">Высокий</option>
+                        <option value="2">Срочный</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
+                <button onclick="closeLegalCreateModal()" class="btn-muted">Отмена</button>
+                <button onclick="submitLegalCreate()" class="btn-green">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="legalHistoryModal" class="modal">
+        <div class="modal-content" style="max-width:520px">
+            <h3 style="margin-bottom:0.5rem"><span id="legalHistTitle"></span></h3>
+            <input type="hidden" id="legalHistLeadId">
+            <div id="legalHistList" style="max-height:240px;overflow-y:auto;margin-bottom:1rem;font-size:0.85rem;color:var(--muted)"></div>
+            <label style="color:var(--muted);font-size:0.8rem">Добавить заметку</label>
+            <textarea id="legalHistNote" rows="2" style="width:100%;margin-bottom:0.75rem"></textarea>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem">
+                <button onclick="closeLegalHistoryModal()" class="btn-muted">Закрыть</button>
+                <button onclick="submitLegalNote()" class="btn-green">Сохранить заметку</button>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     <script>
@@ -644,6 +778,12 @@
         let allStats = {};
         let summaryData = {};
         let funnelSummaryData = {};
+        let activeCrmMode = 'physical';
+        let legalLeadsData = [];
+        let legalSummary = {};
+        let legalStatusLabels = {};
+        let legalActiveFilter = 'all';
+        const LEGAL_STATUS_KEYS = ['pool', 'outreach', 'qualified', 'stop'];
         let activeFilter = 'all';
         let activePeriod = 'all';
         let activeDateFilter = 'all';
@@ -791,6 +931,350 @@
             document.getElementById('greenCount').textContent = green;
             document.getElementById('purpleCount').textContent = purple;
             document.getElementById('avgPerDay').textContent = '—';
+        }
+
+        function showCrmMode(mode, el) {
+            activeCrmMode = mode;
+            const ph = document.getElementById('crmTabPhysical');
+            const lg = document.getElementById('crmTabLegal');
+            const mt = document.getElementById('crmTabMail');
+            if (ph) ph.classList.toggle('active', mode === 'physical');
+            if (lg) lg.classList.toggle('active', mode === 'legal');
+            if (mt) mt.classList.toggle('active', mode === 'mail');
+            const pw = document.getElementById('physicalCrmWrap');
+            const lw = document.getElementById('legalCrmWrap');
+            const mw = document.getElementById('mailCrmWrap');
+            if (pw) pw.style.display = mode === 'physical' ? '' : 'none';
+            if (lw) lw.style.display = mode === 'legal' ? '' : 'none';
+            if (mw) mw.style.display = mode === 'mail' ? '' : 'none';
+            if (mode === 'legal') loadLegalCrm();
+            if (mode === 'mail') loadBulkMailStatus();
+        }
+
+        async function loadBulkMailStatus() {
+            const hint = document.getElementById('bulkMailHint');
+            const btn = document.getElementById('bulkMailSubmit');
+            try {
+                const r = await fetch('/api/mail/status');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                if (d.configured) {
+                    if (hint) hint.textContent = `SMTP: ${d.host}:${d.port} (${d.use_ssl ? 'SSL' : 'STARTTLS'}) — можно отправлять`;
+                    if (btn) btn.disabled = false;
+                } else {
+                    if (hint) hint.textContent = 'В .env не заданы SMTP_HOST, SMTP_USER, SMTP_PASSWORD (см. .env.example)';
+                    if (btn) btn.disabled = true;
+                }
+            } catch (e) {
+                if (hint) hint.textContent = 'Не удалось проверить SMTP';
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function submitBulkMail() {
+            const resEl = document.getElementById('bulkMailResult');
+            if (resEl) resEl.textContent = '';
+            const emails = document.getElementById('bulkMailEmails')?.value || '';
+            const subject = document.getElementById('bulkMailSubject')?.value || '';
+            const body = document.getElementById('bulkMailBody')?.value || '';
+            const fileEl = document.getElementById('bulkMailFile');
+            const fd = new FormData();
+            fd.append('emails', emails);
+            fd.append('subject', subject);
+            fd.append('body', body);
+            if (fileEl && fileEl.files && fileEl.files[0]) fd.append('file', fileEl.files[0]);
+            try {
+                const r = await fetch('/api/mail/send', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (!r.ok) {
+                    const err = typeof d.detail === 'string' ? d.detail : (Array.isArray(d.detail) ? d.detail.map(x => x.msg || x).join('; ') : 'Ошибка');
+                    throw new Error(err);
+                }
+                let msg = `Отправлено: ${d.sent} из ${d.total}`;
+                if (d.failed && d.failed.length) msg += `. Ошибки: ${d.failed.map(f => f.email + ': ' + f.error).join('; ')}`;
+                if (resEl) resEl.textContent = msg;
+                alert(msg);
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        function legalToDatetimeLocal(s) {
+            if (!s) return '';
+            const t = String(s).trim();
+            const m = t.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);
+            if (m) return m[1] + 'T' + m[2] + ':' + m[3];
+            const m2 = t.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (m2) return m2[1] + 'T09:00';
+            return '';
+        }
+
+        async function loadLegalSheetSettings() {
+            const meta = document.getElementById('legalSheetMeta');
+            const inp = document.getElementById('legalSheetUrl');
+            try {
+                const r = await fetch('/api/legal/settings');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                if (inp) inp.value = d.sheet_url || '';
+                if (meta) meta.textContent = d.sheet_modified ? ('Последнее изменение в Drive: ' + d.sheet_modified) : (d.sheet_url ? '' : 'Ссылка не сохранена');
+            } catch (e) {
+                if (meta) meta.textContent = '';
+            }
+        }
+
+        async function saveLegalSheetSettings() {
+            const url = (document.getElementById('legalSheetUrl')?.value || '').trim();
+            try {
+                const r = await fetch('/api/legal/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                await loadLegalSheetSettings();
+                alert('Ссылка сохранена');
+            } catch (e) { alert(e.message); }
+        }
+
+        async function syncLegalFromSheet() {
+            try {
+                const r = await fetch('/api/legal/sync', { method: 'POST' });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                alert(`Строк в таблице: ${d.row_count}. Создано: ${d.created}, обновлено: ${d.updated}, пропущено: ${d.skipped}`);
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function pushLegalZvonok() {
+            const campaign_id = (document.getElementById('legalZvonokCampaign')?.value || '').trim() || null;
+            const lead_ids = legalLeadsData.map(r => r.id);
+            try {
+                const r = await fetch('/api/legal/integrations/zvonok', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead_ids, campaign_id }),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || d.error || 'Ошибка');
+                let msg = d.ok ? `OK. Номеров в запросе: ${d.phones_sent ?? '—'}. Лидов в выборке: ${d.leads_considered ?? lead_ids.length}` : (d.error || 'Сбой');
+                if (d.body_preview) msg += '\n\nОтвет API (фрагмент):\n' + String(d.body_preview).slice(0, 500);
+                alert(msg);
+            } catch (e) { alert(e.message); }
+        }
+
+        async function pushLegalElama() {
+            const audience_id = (document.getElementById('legalElamaAudience')?.value || '').trim() || null;
+            const lead_ids = legalLeadsData.map(r => r.id);
+            try {
+                const r = await fetch('/api/legal/integrations/elama', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lead_ids, audience_id }),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || d.error || 'Ошибка');
+                let msg = d.ok ? `OK. Email в запросе: ${d.emails_sent ?? '—'}. Лидов в выборке: ${d.leads_considered ?? lead_ids.length}` : (d.error || 'Сбой');
+                if (d.body_preview) msg += '\n\nОтвет API (фрагмент):\n' + String(d.body_preview).slice(0, 500);
+                alert(msg);
+            } catch (e) { alert(e.message); }
+        }
+
+        async function loadLegalCrm() {
+            const wrap = document.getElementById('legalTableWrap');
+            if (wrap) wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
+            await loadLegalSheetSettings();
+            try {
+                let url = '/api/legal/leads';
+                const qp = [];
+                if (legalActiveFilter === 'due') qp.push('due=1');
+                else if (legalActiveFilter !== 'all') qp.push('status=' + encodeURIComponent(legalActiveFilter));
+                if (qp.length) url += '?' + qp.join('&');
+                const r = await fetch(url);
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                legalLeadsData = d.leads || [];
+                legalSummary = d.summary || {};
+                legalStatusLabels = d.status_labels || {};
+                renderLegalFunnel();
+                renderLegalStatusFilters();
+                renderLegalTable();
+            } catch (e) {
+                if (wrap) wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+            }
+        }
+
+        function renderLegalFunnel() {
+            const wrap = document.getElementById('legalFunnelWrap');
+            if (!wrap) return;
+            const s = legalSummary;
+            const total = s.total || 0;
+            const dueN = s.due_today ?? 0;
+            const parts = [`Всего: ${total}`, `Пора звонить: ${dueN}`];
+            LEGAL_STATUS_KEYS.forEach(k => {
+                const lbl = legalStatusLabels[k] || k;
+                parts.push(`${lbl}: ${s[k] || 0}`);
+            });
+            wrap.innerHTML = `<span style="color:var(--muted)">${parts.join(' · ')}</span>`;
+        }
+
+        function renderLegalStatusFilters() {
+            const el = document.getElementById('legalStatusFilters');
+            if (!el) return;
+            const s = legalSummary;
+            const dueN = s.due_today ?? 0;
+            el.innerHTML = `<button class="filter-btn ${legalActiveFilter === 'all' ? 'active' : ''}" onclick="setLegalFilter('all')">Все (${s.total || 0})</button>` +
+                `<button class="filter-btn ${legalActiveFilter === 'due' ? 'active' : ''}" onclick="setLegalFilter('due')" title="Просрочено или сегодня, кроме стоп">Пора звонить (${dueN})</button>` +
+                LEGAL_STATUS_KEYS.map(k => {
+                    const lbl = legalStatusLabels[k] || k;
+                    return `<button class="filter-btn ${legalActiveFilter === k ? 'active' : ''}" onclick="setLegalFilter('${k}')">${lbl} (${s[k] || 0})</button>`;
+                }).join('');
+        }
+
+        function setLegalFilter(key) {
+            legalActiveFilter = key;
+            loadLegalCrm();
+        }
+
+        function renderLegalTable() {
+            const wrap = document.getElementById('legalTableWrap');
+            if (!wrap) return;
+            let rows = legalLeadsData;
+            const q = (document.getElementById('legalSearch')?.value || '').trim().toLowerCase();
+            if (q) {
+                rows = rows.filter(r =>
+                    (r.company_name || '').toLowerCase().includes(q) ||
+                    (r.inn || '').toLowerCase().includes(q) ||
+                    (r.phone || '').toLowerCase().includes(q) ||
+                    (r.email || '').toLowerCase().includes(q) ||
+                    (r.okved || '').toLowerCase().includes(q) ||
+                    (r.region || '').toLowerCase().includes(q));
+            }
+            if (!rows.length) {
+                wrap.innerHTML = '<p style="color:var(--muted)">Нет записей. Добавьте компанию или смените фильтр.</p>';
+                return;
+            }
+            wrap.innerHTML = `<table class="calls-table"><thead><tr>
+                <th>Компания</th><th>ИНН</th><th>Телефон</th><th>Email</th><th>ОКВЭД</th><th>Регион</th><th>Приор.</th><th>След. касание</th><th>Статус</th><th>Обновлено</th><th></th>
+            </tr></thead><tbody>` + rows.map(r => {
+                const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+                const pr = +r.priority || 0;
+                const dtl = legalToDatetimeLocal(r.next_contact_at || '');
+                return `<tr>
+                    <td><strong>${esc(r.company_name)}</strong><br><span style="color:var(--muted);font-size:0.7rem">${esc(r.source)}</span></td>
+                    <td>${esc(r.inn)}</td>
+                    <td>${esc(r.phone)}</td>
+                    <td>${esc(r.email)}</td>
+                    <td>${esc(r.okved)}</td>
+                    <td>${esc(r.region)}</td>
+                    <td><select class="status-select" style="min-width:5rem" onchange="patchLegalPriority(${r.id}, this.value)">
+                        <option value="0" ${pr===0?'selected':''}>—</option>
+                        <option value="1" ${pr===1?'selected':''}>↑</option>
+                        <option value="2" ${pr===2?'selected':''}>!!</option>
+                    </select></td>
+                    <td><input type="datetime-local" class="econom-input" style="min-width:10rem;font-size:0.75rem" value="${dtl}" onchange="patchLegalNextContact(${r.id}, this)"></td>
+                    <td><select class="status-select" data-legal-id="${r.id}" onchange="patchLegalStatus(${r.id}, this.value)">
+                        ${LEGAL_STATUS_KEYS.map(k => `<option value="${k}" ${r.status===k?'selected':''}>${legalStatusLabels[k]||k}</option>`).join('')}
+                    </select></td>
+                    <td class="date-cell">${formatDateShort(r.updated_at || '') || '—'}</td>
+                    <td class="actions-cell">
+                        <button onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem">История</button>
+                    </td>
+                </tr>`;
+            }).join('') + '</tbody></table>';
+        }
+
+        async function patchLegalStatus(id, status) {
+            try {
+                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); loadLegalCrm(); }
+        }
+
+        async function patchLegalPriority(id, pri) {
+            try {
+                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: +pri }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); loadLegalCrm(); }
+        }
+
+        async function patchLegalNextContact(id, el) {
+            const v = el.value;
+            const next_contact_at = v ? v.replace('T', ' ') + ':00' : '';
+            try {
+                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_contact_at }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); loadLegalCrm(); }
+        }
+
+        function openLegalCreateModal() {
+            ['legalNewName','legalNewInn','legalNewPhone','legalNewEmail','legalNewOkved','legalNewRegion'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+            const nxc = document.getElementById('legalNewNextContact'); if (nxc) nxc.value = '';
+            const pr = document.getElementById('legalNewPriority'); if (pr) pr.value = '0';
+            document.getElementById('legalNewSource').value = 'manual';
+            document.getElementById('legalCreateModal').classList.add('show');
+        }
+        function closeLegalCreateModal() { document.getElementById('legalCreateModal').classList.remove('show'); }
+
+        async function submitLegalCreate() {
+            const company_name = (document.getElementById('legalNewName')?.value || '').trim();
+            if (!company_name) { alert('Укажите название'); return; }
+            const ncEl = document.getElementById('legalNewNextContact');
+            const ncRaw = (ncEl && ncEl.value) ? ncEl.value.replace('T', ' ') + ':00' : '';
+            const body = {
+                company_name,
+                inn: document.getElementById('legalNewInn')?.value || '',
+                phone: document.getElementById('legalNewPhone')?.value || '',
+                email: document.getElementById('legalNewEmail')?.value || '',
+                okved: document.getElementById('legalNewOkved')?.value || '',
+                region: document.getElementById('legalNewRegion')?.value || '',
+                source: document.getElementById('legalNewSource')?.value || 'manual',
+                next_contact_at: ncRaw,
+                priority: +(document.getElementById('legalNewPriority')?.value || 0),
+            };
+            try {
+                const r = await fetch('/api/legal/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                closeLegalCreateModal();
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function openLegalHistory(id) {
+            document.getElementById('legalHistLeadId').value = id;
+            document.getElementById('legalHistNote').value = '';
+            const list = document.getElementById('legalHistList');
+            list.innerHTML = 'Загрузка...';
+            document.getElementById('legalHistoryModal').classList.add('show');
+            try {
+                const r = await fetch('/api/legal/leads/' + id);
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                document.getElementById('legalHistTitle').textContent = d.company_name || ('Лид #' + id);
+                list.innerHTML = (d.events || []).length ? (d.events || []).map(ev =>
+                    `<div style="margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
+                        <span style="opacity:0.7">${(ev.created_at || '').slice(0, 16).replace('T', ' ')}</span> [${ev.type}]<br>${(ev.description || '').replace(/</g,'&lt;')}</div>`).join('') : '<p>Нет записей</p>';
+            } catch (e) { list.innerHTML = '<p style="color:var(--red)">' + e.message + '</p>'; }
+        }
+        function closeLegalHistoryModal() { document.getElementById('legalHistoryModal').classList.remove('show'); }
+
+        async function submitLegalNote() {
+            const id = +document.getElementById('legalHistLeadId').value;
+            const description = (document.getElementById('legalHistNote')?.value || '').trim();
+            if (!description) { alert('Введите текст'); return; }
+            try {
+                const r = await fetch('/api/legal/leads/' + id + '/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                document.getElementById('legalHistNote').value = '';
+                openLegalHistory(id);
+                await loadLegalCrm();
+            } catch (e) { alert(e.message); }
         }
 
         document.addEventListener('DOMContentLoaded', () => {

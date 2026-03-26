@@ -1,10 +1,13 @@
 """Точка входа — FastAPI + веб-интерфейс."""
 import asyncio
+import csv
+import io
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime as _dt, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -47,8 +50,29 @@ from database import (
     get_client_full_history,
     get_unfinished_tasks_for_reminder,
     record_task_reminder_sent,
+    LEGAL_LEAD_STATUSES,
+    legal_leads_list,
+    legal_lead_summary,
+    legal_lead_create,
+    legal_lead_update,
+    legal_lead_add_event,
+    legal_lead_events,
+    legal_import_upsert_row,
+    get_crm_setting,
+    set_crm_setting,
+    CRM_SETTING_LEGAL_SHEET_URL,
+    legal_lead_get,
 )
-from google_sheets import fetch_call_data, debug_colors, get_spreadsheet_last_modified
+from google_sheets import (
+    fetch_call_data,
+    debug_colors,
+    get_spreadsheet_last_modified,
+    fetch_legal_sheet_rows,
+    extract_sheet_id,
+)
+from integrations.zvonok import push_phones
+from integrations.elama import push_emails
+from integrations.smtp_send import send_bulk_plain, parse_recipients, smtp_configured, smtp_settings_from_env
 from stats import calculate_stats
 from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_task_from_worker, send_weekly_report, set_bot_commands
 from models import RowStatus
@@ -81,22 +105,23 @@ async def _reminder_loop():
 
 
 async def _inactive_check_loop():
-    """Проверка забытых клиентов раз в день."""
-    await asyncio.sleep(60)
-    while True:
-        try:
-            inactive = get_inactive_clients(days=3)
-            if inactive:
-                max_show = 50
-                lines = [f"  • {c['phone']}{' / ' + c['name'] if c['name'] else ''} — {STATUS_LABELS.get(c['status'], c['status'])}"
-                         for c in inactive[:max_show]]
-                msg = f"⚠️ Клиенты без активности 3+ дня ({len(inactive)}):\n\n" + "\n".join(lines)
-                if len(inactive) > max_show:
-                    msg += f"\n  ...и ещё {len(inactive) - max_show}"
-                send_telegram(msg)
-        except Exception:
-            pass
-        await asyncio.sleep(24 * 3600)  # раз в сутки
+    """Проверка забытых клиентов раз в день — отключена (нет create_task в lifespan)."""
+    # await asyncio.sleep(60)
+    # while True:
+    #     try:
+    #         inactive = get_inactive_clients(days=3)
+    #         if inactive:
+    #             max_show = 50
+    #             lines = [f"  • {c['phone']}{' / ' + c['name'] if c['name'] else ''} — {STATUS_LABELS.get(c['status'], c['status'])}"
+    #                      for c in inactive[:max_show]]
+    #             msg = f"⚠️ Клиенты без активности 3+ дня ({len(inactive)}):\n\n" + "\n".join(lines)
+    #             if len(inactive) > max_show:
+    #                 msg += f"\n  ...и ещё {len(inactive) - max_show}"
+    #             send_telegram(msg)
+    #     except Exception:
+    #         pass
+    #     await asyncio.sleep(24 * 3600)  # раз в сутки
+    return
 
 
 async def _task_reminder_loop():
@@ -175,13 +200,13 @@ async def lifespan(app: FastAPI):
     init_db()
     set_bot_commands()
     t1 = asyncio.create_task(_reminder_loop())
-    t2 = asyncio.create_task(_inactive_check_loop())
+    # t2 = asyncio.create_task(_inactive_check_loop())  # см. _inactive_check_loop — оповещения о бездействии выкл.
     t4 = asyncio.create_task(_task_reminder_loop())
     from bot import run_polling
     t3 = asyncio.create_task(run_polling())
     yield
     t1.cancel()
-    t2.cancel()
+    # t2.cancel()
     t3.cancel()
     t4.cancel()
 
@@ -283,6 +308,67 @@ class ObjectInfoInput(BaseModel):
     area: str = ""
     budget: str = ""
     work_type: str = ""
+
+
+class LegalLeadCreateInput(BaseModel):
+    company_name: str
+    inn: Optional[str] = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    okved: Optional[str] = ""
+    region: Optional[str] = ""
+    source: Optional[str] = "manual"
+    next_contact_at: Optional[str] = ""
+    priority: Optional[int] = 0
+
+
+class LegalLeadPatchInput(BaseModel):
+    company_name: Optional[str] = None
+    inn: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    okved: Optional[str] = None
+    region: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    next_contact_at: Optional[str] = None
+    priority: Optional[int] = None
+
+
+class LegalLeadEventInput(BaseModel):
+    description: str
+
+
+class LegalSheetSettingsBody(BaseModel):
+    url: str = ""
+
+
+class LegalIntegrationPushBody(BaseModel):
+    lead_ids: Optional[list[int]] = None
+    campaign_id: Optional[str] = None
+    audience_id: Optional[str] = None
+
+
+LEGAL_LEAD_STATUS_LABELS = {
+    "pool": "В базе (обзвон/рассылка)",
+    "outreach": "В обработке",
+    "qualified": "Квалифицирован",
+    "stop": "Стоп / не целевой",
+}
+
+
+def _resolve_legal_leads_for_push(lead_ids: Optional[list[int]]) -> list[dict]:
+    if lead_ids is not None:
+        out: list[dict] = []
+        for lid in lead_ids:
+            row = legal_lead_get(int(lid))
+            if row:
+                out.append(row)
+        return out
+    acc: list[dict] = []
+    for st in ("pool", "outreach"):
+        acc.extend(legal_leads_list(st))
+    return acc
 
 
 @app.get("/favicon.ico")
@@ -446,6 +532,295 @@ async def get_data():
             "avg_per_day": avg_per_day,
         },
     }
+
+
+@app.get("/api/legal/summary")
+async def api_legal_summary(request: Request):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    return legal_lead_summary()
+
+
+@app.get("/api/legal/leads")
+async def api_legal_leads_list(request: Request, status: Optional[str] = None, due: Optional[int] = None):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    st = status if status in LEGAL_LEAD_STATUSES else None
+    due_only = due == 1
+    leads = legal_leads_list(st, due_only=due_only)
+    sumy = legal_lead_summary()
+    sumy["due_today"] = len(legal_leads_list(None, due_only=True))
+    return {"leads": leads, "summary": sumy, "status_labels": LEGAL_LEAD_STATUS_LABELS}
+
+
+@app.get("/api/legal/leads/{lead_id}")
+async def api_legal_lead_detail(request: Request, lead_id: int):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    row = legal_lead_get(lead_id)
+    if not row:
+        raise HTTPException(404, "Не найдено")
+    return {**row, "events": legal_lead_events(lead_id), "status_labels": LEGAL_LEAD_STATUS_LABELS}
+
+
+@app.post("/api/legal/leads")
+async def api_legal_lead_create(request: Request, data: LegalLeadCreateInput):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not data.company_name.strip():
+        raise HTTPException(400, "Укажите название компании")
+    lead_id = legal_lead_create(
+        data.company_name,
+        data.inn or "",
+        data.phone or "",
+        data.email or "",
+        data.okved or "",
+        data.region or "",
+        data.source or "manual",
+        "pool",
+        (data.next_contact_at or "").strip(),
+        int(data.priority or 0),
+    )
+    legal_lead_add_event(lead_id, f"Создано менеджером {user.get('name', '')}", "system")
+    return {"ok": True, "id": lead_id}
+
+
+@app.patch("/api/legal/leads/{lead_id}")
+async def api_legal_lead_patch(request: Request, lead_id: int, data: LegalLeadPatchInput):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    row = legal_lead_get(lead_id)
+    if not row:
+        raise HTTPException(404, "Не найдено")
+    dump = data.model_dump(exclude_unset=True)
+    if "status" in dump and dump["status"] not in LEGAL_LEAD_STATUSES:
+        raise HTTPException(400, "Неверный статус")
+    old_status = row["status"]
+    ok = legal_lead_update(
+        lead_id,
+        company_name=dump.get("company_name"),
+        inn=dump.get("inn"),
+        phone=dump.get("phone"),
+        email=dump.get("email"),
+        okved=dump.get("okved"),
+        region=dump.get("region"),
+        status=dump.get("status"),
+        notes=dump.get("notes"),
+        next_contact_at=dump.get("next_contact_at"),
+        priority=dump.get("priority"),
+    )
+    if not ok:
+        raise HTTPException(404, "Не найдено")
+    if dump.get("status") and dump["status"] != old_status:
+        legal_lead_add_event(
+            lead_id,
+            f"Статус: {LEGAL_LEAD_STATUS_LABELS.get(old_status, old_status)} → {LEGAL_LEAD_STATUS_LABELS.get(dump['status'], dump['status'])}",
+            "status_change",
+        )
+    return {"ok": True}
+
+
+@app.post("/api/legal/leads/{lead_id}/events")
+async def api_legal_lead_add_event(request: Request, lead_id: int, data: LegalLeadEventInput):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not data.description.strip():
+        raise HTTPException(400, "Пустая заметка")
+    if not legal_lead_add_event(lead_id, f"{user.get('name', '')}: {data.description.strip()}", "note"):
+        raise HTTPException(404, "Лид не найден")
+    return {"ok": True}
+
+
+@app.get("/api/legal/settings")
+async def api_legal_settings_get(request: Request):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    url = get_crm_setting(CRM_SETTING_LEGAL_SHEET_URL).strip()
+    mod = get_spreadsheet_last_modified(url) if url else None
+    return {"sheet_url": url, "sheet_modified": mod}
+
+
+@app.post("/api/legal/settings")
+async def api_legal_settings_post(request: Request, data: LegalSheetSettingsBody):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    url = (data.url or "").strip()
+    if url and not extract_sheet_id(url):
+        raise HTTPException(400, "Некорректная ссылка на Google Таблицу")
+    set_crm_setting(CRM_SETTING_LEGAL_SHEET_URL, url)
+    return {"ok": True}
+
+
+@app.post("/api/legal/sync")
+async def api_legal_sync(request: Request):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    url = get_crm_setting(CRM_SETTING_LEGAL_SHEET_URL).strip()
+    if not url:
+        raise HTTPException(400, "Сохраните ссылку на таблицу (поле выше), затем синхронизацию")
+    try:
+        rows = fetch_legal_sheet_rows(url)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        raise HTTPException(502, f"Не удалось прочитать таблицу: {e}") from e
+    created = updated = skipped = 0
+    for d in rows:
+        action, lid = legal_import_upsert_row(
+            d["company_name"],
+            d.get("inn") or "",
+            d.get("phone") or "",
+            d.get("email") or "",
+            d.get("okved") or "",
+            d.get("region") or "",
+            "google_sheet",
+            d.get("next_contact_at") or "",
+            int(d.get("priority") or 0),
+        )
+        if action == "created":
+            created += 1
+        elif action == "updated":
+            updated += 1
+        else:
+            skipped += 1
+        notes = (d.get("notes") or "").strip()
+        if notes and lid and lid > 0:
+            legal_lead_add_event(lid, f"Из таблицы: {notes[:800]}", "note")
+    return {"ok": True, "row_count": len(rows), "created": created, "updated": updated, "skipped": skipped}
+
+
+@app.post("/api/legal/integrations/zvonok")
+async def api_legal_zvonok(request: Request, data: LegalIntegrationPushBody):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    leads = _resolve_legal_leads_for_push(data.lead_ids)
+    campaign_id = (data.campaign_id or "").strip() or None
+    phones = [l["phone"] for l in leads if (l.get("phone") or "").strip()]
+    result = push_phones(phones, campaign_id)
+    result["leads_considered"] = len(leads)
+    return result
+
+
+@app.post("/api/legal/integrations/elama")
+async def api_legal_elama(request: Request, data: LegalIntegrationPushBody):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    leads = _resolve_legal_leads_for_push(data.lead_ids)
+    audience_id = (data.audience_id or "").strip() or None
+    emails = [l["email"] for l in leads if (l.get("email") or "").strip()]
+    result = push_emails(emails, audience_id)
+    result["leads_considered"] = len(leads)
+    return result
+
+
+@app.get("/api/legal/export")
+async def api_legal_export(request: Request, status: Optional[str] = None):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    st = status if status in LEGAL_LEAD_STATUSES else None
+    leads = legal_leads_list(st)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(
+        ["company_name", "inn", "phone", "email", "okved", "region", "status", "priority", "next_contact_at", "notes", "source", "updated_at"]
+    )
+    for r in leads:
+        w.writerow(
+            [
+                r["company_name"],
+                r["inn"],
+                r["phone"],
+                r["email"],
+                r["okved"],
+                r["region"],
+                r["status"],
+                r["priority"],
+                r["next_contact_at"],
+                re.sub(r"[\r\n]+", " ", r["notes"] or ""),
+                r["source"],
+                r["updated_at"] or "",
+            ]
+        )
+    return Response(
+        buf.getvalue().encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="integra_legal_leads.csv"'},
+    )
+
+
+@app.get("/api/mail/status")
+async def api_mail_status(request: Request):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    s = smtp_settings_from_env()
+    return {
+        "configured": smtp_configured(),
+        "host": s["host"] or None,
+        "port": s["port"],
+        "use_ssl": s["use_ssl"],
+    }
+
+
+@app.post("/api/mail/send")
+async def api_mail_send(
+    request: Request,
+    emails: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(""),
+    file: Optional[UploadFile] = File(None),
+):
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not smtp_configured():
+        raise HTTPException(
+            400,
+            "SMTP не настроен. В .env укажите SMTP_HOST, SMTP_USER, SMTP_PASSWORD "
+            "(опц.: SMTP_FROM, SMTP_FROM_NAME, SMTP_PORT, SMTP_SSL=1 для порта 465).",
+        )
+    recipients = parse_recipients(emails)
+    att_name = None
+    att_bytes = None
+    att_ct = None
+    if file is not None and getattr(file, "filename", None):
+        fn = (file.filename or "").strip()
+        if fn:
+            att_name = fn.split("/")[-1].split("\\")[-1]
+            att_bytes = await file.read()
+            att_ct = file.content_type
+            if not att_bytes:
+                att_name = None
+                att_bytes = None
+                att_ct = None
+    result = send_bulk_plain(
+        recipients=recipients,
+        subject=subject,
+        body=body,
+        attachment_name=att_name,
+        attachment_bytes=att_bytes if att_bytes else None,
+        attachment_content_type=att_ct,
+    )
+    if not result.get("ok") and result.get("sent", 0) == 0:
+        err = result.get("error")
+        if err:
+            raise HTTPException(400, err)
+        failed = result.get("failed") or []
+        msg = failed[0].get("error", "Ошибка отправки") if failed else "Ошибка отправки"
+        raise HTTPException(502, msg)
+    return result
 
 
 @app.get("/api/debug-tasks")
