@@ -27,21 +27,35 @@ def extract_emails_from_text(text: str) -> list[str]:
 
 
 def extract_emails_from_pdf_bytes(data: bytes) -> list[str]:
-    import pdfplumber
+    try:
+        import pdfplumber
+    except ImportError as e:
+        raise ImportError(
+            "Нужен пакет pdfplumber: pip install pdfplumber"
+        ) from e
 
     chunks: list[str] = []
-    with pdfplumber.open(io.BytesIO(data)) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                chunks.append(t)
-            for table in page.extract_tables() or []:
-                for row in table:
-                    if not row:
-                        continue
-                    for cell in row:
-                        if cell:
-                            chunks.append(str(cell))
+    try:
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            for page in pdf.pages:
+                try:
+                    t = page.extract_text()
+                    if t:
+                        chunks.append(t)
+                except Exception:
+                    continue
+                try:
+                    for table in page.extract_tables() or []:
+                        for row in table:
+                            if not row:
+                                continue
+                            for cell in row:
+                                if cell:
+                                    chunks.append(str(cell))
+                except Exception:
+                    continue
+    except Exception as e:
+        raise ValueError(f"PDF не читается или повреждён: {e}") from e
     return extract_emails_from_text("\n".join(chunks))
 
 

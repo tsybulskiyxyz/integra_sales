@@ -703,6 +703,18 @@ async def api_mail_extract_emails(
             emails, src = extract_emails_from_upload(file.filename or "", data)
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+        except ImportError as e:
+            raise HTTPException(
+                503,
+                "На сервере не установлены библиотеки для файлов. В каталоге проекта: "
+                "source .venv/bin/activate && pip install -r requirements.txt "
+                f"(ошибка: {e})",
+            ) from e
+        except Exception as e:
+            raise HTTPException(
+                422,
+                f"Не удалось разобрать файл (PDF/Excel). Проверьте формат или размер. Детали: {e}",
+            ) from e
         merged.extend(emails)
         sources.append(src)
     url = (sheet_url or "").strip()
