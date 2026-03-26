@@ -65,8 +65,10 @@ from google_sheets import (
     debug_colors,
     get_spreadsheet_last_modified,
     fetch_legal_sheet_rows,
+    fetch_sheet_flat_text,
 )
 from integrations.smtp_send import send_bulk_plain, parse_recipients, smtp_configured, smtp_settings_from_env
+from integrations.email_harvest import extract_emails_from_text, extract_emails_from_upload
 from stats import calculate_stats
 from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_task_from_worker, send_weekly_report, set_bot_commands
 from models import RowStatus
@@ -681,6 +683,51 @@ async def api_legal_export(request: Request, status: Optional[str] = None):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="integra_legal_leads.csv"'},
     )
+
+
+@app.post("/api/mail/extract-emails")
+async def api_mail_extract_emails(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    sheet_url: str = Form(""),
+):
+    """Достать email из PDF / Excel / CSV / TXT или из Google Таблицы (первая вкладка, A:AZ)."""
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    merged: list[str] = []
+    sources: list[str] = []
+    if file is not None and getattr(file, "filename", None) and (file.filename or "").strip():
+        data = await file.read()
+        try:
+            emails, src = extract_emails_from_upload(file.filename or "", data)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        merged.extend(emails)
+        sources.append(src)
+    url = (sheet_url or "").strip()
+    if url:
+        try:
+            text = fetch_sheet_flat_text(url)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except Exception as e:
+            raise HTTPException(502, f"Google Sheets: {e}") from e
+        merged.extend(extract_emails_from_text(text))
+        sources.append("google_sheet")
+    if not sources:
+        raise HTTPException(
+            400,
+            "Прикрепите файл (.pdf, .xlsx, .xls, .csv, .txt) и/или укажите ссылку на Google Таблицу",
+        )
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for e in merged:
+        el = e.lower().strip()
+        if el not in seen:
+            seen.add(el)
+            uniq.append(el)
+    return {"emails": uniq, "count": len(uniq), "sources": sources}
 
 
 @app.get("/api/mail/status")

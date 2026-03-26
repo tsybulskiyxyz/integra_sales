@@ -1,12 +1,37 @@
 """Нормализация строк юр-лидов из Google Sheets (первая строка = заголовки)."""
 
+import re
 from typing import Any
 
 LEGAL_SHEET_FIELD_ALIASES = {
     "company_name": ("company_name", "название", "компания", "наименование", "name", "организация", "org", "полное_наименование"),
     "inn": ("inn", "инн", "инн/кпп"),
-    "phone": ("phone", "телефон", "tel", "тел", "мобильный"),
-    "email": ("email", "e-mail", "почта", "mail"),
+    "phone": (
+        "phone",
+        "телефон",
+        "tel",
+        "тел",
+        "мобильный",
+        "телефоны",
+        "phones",
+        "номера",
+        "номер",
+        "список_телефонов",
+        "phone_list",
+        "доп_телефон",
+        "дополнительный_телефон",
+    ),
+    "email": (
+        "email",
+        "e-mail",
+        "почта",
+        "mail",
+        "emails",
+        "почты",
+        "список_email",
+        "email_list",
+        "адреса_email",
+    ),
     "okved": ("okved", "оквэд", "оквед"),
     "region": ("region", "регион", "город", "адрес"),
     "next_contact_at": ("next_contact_at", "next_contact", "следующее_касание", "дата_касания", "follow_up", "followup"),
@@ -26,6 +51,88 @@ def pick_legal_field(rev: dict[str, str], field: str) -> str:
     return ""
 
 
+def _split_phone_tokens(*text_parts: str) -> list[str]:
+    """Несколько номеров: в ячейке через запятую, ; слэш, перенос; внутри номера — пробелы и дефисы."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in text_parts:
+        if not raw or not str(raw).strip():
+            continue
+        for segment in re.split(r"[,;/|]+|\n+", str(raw).strip()):
+            segment = segment.strip()
+            if not segment:
+                continue
+            digits = re.sub(r"\D", "", segment)
+            if len(digits) >= 10:
+                if digits not in seen:
+                    seen.add(digits)
+                    out.append(digits)
+    return out
+
+
+def _split_email_tokens(*text_parts: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    email_re = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+    for raw in text_parts:
+        if not raw or not str(raw).strip():
+            continue
+        for part in re.split(r"[\s,;|/\n]+", str(raw).strip()):
+            part = part.strip().lower()
+            if not part:
+                continue
+            m = email_re.search(part)
+            if m:
+                e = m.group(0).lower()
+                if e not in seen:
+                    seen.add(e)
+                    out.append(e)
+    return out
+
+
+def collect_phones_from_rev(rev: dict[str, str]) -> str:
+    """Все ячейки с телефонами: явные алиасы + заголовки с «телефон»/«phone» (без email)."""
+    parts: list[str] = []
+    used_keys: set[str] = set()
+    for alias in LEGAL_SHEET_FIELD_ALIASES["phone"]:
+        if alias in rev and (rev[alias] or "").strip():
+            parts.append((rev[alias] or "").strip())
+            used_keys.add(alias)
+    for k, v in rev.items():
+        if not k or not (v or "").strip():
+            continue
+        kl = k.lower()
+        if k in used_keys:
+            continue
+        if "email" in kl and "тел" not in kl:
+            continue
+        if "телефон" in kl or kl in ("tel", "phones", "mobile", "моб", "мобильный"):
+            parts.append(v.strip())
+        elif kl == "phone" or kl.startswith("phone_") or kl.endswith("_phone"):
+            parts.append(v.strip())
+    nums = _split_phone_tokens(*parts)
+    return ", ".join(nums) if nums else ""
+
+
+def collect_emails_from_rev(rev: dict[str, str]) -> str:
+    parts: list[str] = []
+    used_keys: set[str] = set()
+    for alias in LEGAL_SHEET_FIELD_ALIASES["email"]:
+        if alias in rev and (rev[alias] or "").strip():
+            parts.append((rev[alias] or "").strip())
+            used_keys.add(alias)
+    for k, v in rev.items():
+        if not k or not (v or "").strip():
+            continue
+        kl = k.lower()
+        if k in used_keys:
+            continue
+        if "почт" in kl or "email" in kl or kl in ("mail", "e-mail", "mails"):
+            parts.append(v.strip())
+    emails = _split_email_tokens(*parts)
+    return ", ".join(emails) if emails else ""
+
+
 def parse_legal_priority(val: str) -> int:
     t = (val or "").strip().lower()
     if t in ("2", "срочно", "urgent"):
@@ -42,8 +149,8 @@ def legal_row_from_sheet_rev(rev: dict[str, str]) -> dict[str, Any]:
     return {
         "company_name": pick_legal_field(rev, "company_name"),
         "inn": pick_legal_field(rev, "inn"),
-        "phone": pick_legal_field(rev, "phone"),
-        "email": pick_legal_field(rev, "email"),
+        "phone": collect_phones_from_rev(rev),
+        "email": collect_emails_from_rev(rev),
         "okved": pick_legal_field(rev, "okved"),
         "region": pick_legal_field(rev, "region"),
         "next_contact_at": pick_legal_field(rev, "next_contact_at"),

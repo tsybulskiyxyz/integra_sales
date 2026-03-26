@@ -537,7 +537,7 @@
         <div id="legalCrmWrap" style="display:none">
             <div class="card" style="margin-bottom:1rem">
                 <h3 style="margin-bottom:0.75rem">Юрики</h3>
-                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Ссылка на таблицу и импорт строк в CRM задаются на сервере в <strong>.env</strong> (<code>GOOGLE_LEGAL_SHEET_URL</code>), без ввода в интерфейсе. Сервисный аккаунт из <code>GOOGLE_CREDENTIALS_PATH</code> должен иметь доступ к этой таблице. Импорт из таблицы: <code>POST /api/legal/sync</code> под сессией менеджера или по расписанию с сервера.</p>
+                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Ссылка — <code>GOOGLE_LEGAL_SHEET_URL</code> в <strong>.env</strong>; импорт — <code>POST /api/legal/sync</code>. Строка таблицы: <strong>компания</strong> (название / компания / name и т.д.), <strong>телефоны</strong> и <strong>почты</strong> — одна или несколько колонок (телефон, телефоны, доп_телефон…) или несколько номеров в одной ячейке через запятую; то же для email. Номера в CRM сохраняются цифрами через запятую.</p>
                 <div class="funnel" id="legalFunnelWrap" style="font-size:0.85rem"></div>
             </div>
             <div class="card">
@@ -555,9 +555,18 @@
             <div class="card">
                 <h3 style="margin-bottom:0.75rem">Рассылка с вашего ящика (SMTP)</h3>
                 <p id="bulkMailHint" style="color:var(--muted);font-size:0.8rem;margin-bottom:1rem">Загрузка настроек…</p>
-                <p style="color:var(--muted);font-size:0.75rem;margin-bottom:1rem">Адреса — через запятую, пробел или с новой строки. Письма уходят по одному на адрес (получатели не видят друг друга). Пароль в .env, не в форме. Gmail — только «пароль приложения».</p>
+                <p style="color:var(--muted);font-size:0.75rem;margin-bottom:1rem">Адреса — вручную или <strong>подтянуть из файла / таблицы</strong> (PDF с таблицами, .xlsx / .xls, .csv). Google: вставьте ссылку — сервисный аккаунт из <code>GOOGLE_CREDENTIALS_PATH</code> должен иметь доступ к таблице. Письма уходят по одному на адрес.</p>
+                <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem">
+                    <div style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">Добавить email в список «Кому»</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+                        <input type="file" id="bulkMailExtractFile" accept=".pdf,.xlsx,.xls,.xlsm,.csv,.txt,application/pdf" style="font-size:0.8rem;max-width:100%">
+                    </div>
+                    <input type="url" id="bulkMailSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/... (опционально)" style="width:100%;margin-bottom:0.5rem">
+                    <button type="button" class="btn-muted" onclick="harvestEmailsIntoBulk()">Собрать и добавить в список</button>
+                    <span id="bulkMailHarvestResult" style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"></span>
+                </div>
                 <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Кому</label>
-                <textarea id="bulkMailEmails" rows="4" placeholder="client1@mail.ru&#10;client2@company.com" style="width:100%;margin-bottom:0.75rem;resize:vertical"></textarea>
+                <textarea id="bulkMailEmails" rows="6" placeholder="client1@mail.ru&#10;client2@company.com" style="width:100%;margin-bottom:0.75rem;resize:vertical"></textarea>
                 <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Тема</label>
                 <input type="text" id="bulkMailSubject" style="width:100%;margin-bottom:0.75rem" placeholder="Тема письма">
                 <label style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Текст</label>
@@ -955,6 +964,49 @@
             } catch (e) {
                 if (hint) hint.textContent = 'Не удалось проверить SMTP';
                 if (btn) btn.disabled = false;
+            }
+        }
+
+        function _parseEmailListFromTextarea(raw) {
+            const t = (raw || '').trim();
+            if (!t) return [];
+            const set = new Set();
+            t.split(/[\s,;]+/).forEach(p => {
+                const e = p.trim().toLowerCase();
+                if (e.includes('@')) set.add(e);
+            });
+            return Array.from(set);
+        }
+
+        async function harvestEmailsIntoBulk() {
+            const hint = document.getElementById('bulkMailHarvestResult');
+            if (hint) hint.textContent = '…';
+            const url = (document.getElementById('bulkMailSheetUrl')?.value || '').trim();
+            const fileEl = document.getElementById('bulkMailExtractFile');
+            const fd = new FormData();
+            if (fileEl && fileEl.files && fileEl.files[0]) fd.append('file', fileEl.files[0]);
+            if (url) fd.append('sheet_url', url);
+            if (!fileEl?.files?.[0] && !url) {
+                if (hint) hint.textContent = '';
+                alert('Выберите файл и/или вставьте ссылку на Google Таблицу');
+                return;
+            }
+            try {
+                const r = await fetch('/api/mail/extract-emails', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Ошибка');
+                const ta = document.getElementById('bulkMailEmails');
+                const existing = _parseEmailListFromTextarea(ta?.value || '');
+                const got = (d.emails || []).map(e => String(e).toLowerCase());
+                const merged = [];
+                const seen = new Set();
+                existing.forEach(e => { if (!seen.has(e)) { seen.add(e); merged.push(e); } });
+                got.forEach(e => { if (!seen.has(e)) { seen.add(e); merged.push(e); } });
+                if (ta) ta.value = merged.join('\n');
+                if (hint) hint.textContent = `Добавлено из: ${(d.sources || []).join(', ')}. Всего в списке: ${merged.length} (новых найдено: ${got.length})`;
+            } catch (e) {
+                if (hint) hint.textContent = '';
+                alert(e.message);
             }
         }
 

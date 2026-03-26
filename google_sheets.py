@@ -239,7 +239,7 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
 
     values_result = service.spreadsheets().values().get(
         spreadsheetId=sheet_id,
-        range=f"'{sheet_name}'!A:Z",
+        range=f"'{sheet_name}'!A:AZ",
     ).execute()
     data = values_result.get("values", [])
     if len(data) < 2:
@@ -253,9 +253,43 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
         cells = [str(row[i]).strip() if i < len(row) else "" for i in range(len(headers))]
         rev: dict[str, str] = {}
         for i, h in enumerate(headers):
-            if h and i < len(cells):
-                rev[h] = cells[i]
+            if not h or i >= len(cells):
+                continue
+            v = cells[i]
+            if h not in rev:
+                rev[h] = v
+            else:
+                if v:
+                    if rev[h].strip():
+                        rev[h] = rev[h].strip() + ", " + v
+                    else:
+                        rev[h] = v
         parsed = legal_row_from_sheet_rev(rev)
         if parsed.get("company_name"):
             out.append(parsed)
     return out
+
+
+def fetch_sheet_flat_text(sheet_url: str) -> str:
+    """Все непустые ячейки первого листа в одну строку (для извлечения email и т.п.)."""
+    if not sheet_url:
+        raise ValueError("Укажите ссылку на Google Таблицу")
+    sheet_id = extract_sheet_id(sheet_url)
+    if not sheet_id:
+        raise ValueError("Некорректная ссылка на Google Таблицу")
+
+    service = _get_sheets_service()
+    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    sheet_name = meta["sheets"][0]["properties"]["title"]
+
+    values_result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=f"'{sheet_name}'!A:AZ",
+    ).execute()
+    rows = values_result.get("values", [])
+    parts: list[str] = []
+    for row in rows:
+        for cell in row:
+            if cell is not None and str(cell).strip():
+                parts.append(str(cell).strip())
+    return "\n".join(parts)
