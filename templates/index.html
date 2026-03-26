@@ -536,22 +536,9 @@
 
         <div id="legalCrmWrap" style="display:none">
             <div class="card" style="margin-bottom:1rem">
-                <h3 style="margin-bottom:0.75rem">Юрики — база и обход</h3>
-                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Таблица Google (как у физиков): вставьте ссылку → сохраните → «Загрузить из таблицы». Дальше — выгрузка телефонов в Zvonok и email в eLama для текущего списка (с учётом фильтра). Скопируйте сервисный аккаунт на таблицу. Колонки: компания, ИНН, телефон, email, ОКВЭД, регион; опционально: следующее касание, приоритет, комментарий.</p>
-                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
-                    <input type="url" id="legalSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." style="flex:1;min-width:240px">
-                    <button type="button" class="btn-muted" onclick="saveLegalSheetSettings()">Сохранить ссылку</button>
-                    <button type="button" class="btn-primary" onclick="syncLegalFromSheet()">Загрузить из таблицы</button>
-                </div>
-                <p id="legalSheetMeta" style="font-size:0.75rem;color:var(--muted);margin:0 0 0.75rem"></p>
+                <h3 style="margin-bottom:0.75rem">Юрики</h3>
+                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Ссылка на таблицу и импорт строк в CRM задаются на сервере в <strong>.env</strong> (<code>GOOGLE_LEGAL_SHEET_URL</code>), без ввода в интерфейсе. Сервисный аккаунт из <code>GOOGLE_CREDENTIALS_PATH</code> должен иметь доступ к этой таблице. Импорт из таблицы: <code>POST /api/legal/sync</code> под сессией менеджера или по расписанию с сервера.</p>
                 <div class="funnel" id="legalFunnelWrap" style="font-size:0.85rem"></div>
-                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border)">
-                    <span style="color:var(--muted);font-size:0.8rem">Интеграции (ключи в .env):</span>
-                    <input type="text" id="legalZvonokCampaign" placeholder="Zvonok campaign id (опц.)" style="min-width:10rem;max-width:14rem">
-                    <button type="button" class="btn-muted" onclick="pushLegalZvonok()">В Zvonok (тел. на экране)</button>
-                    <input type="text" id="legalElamaAudience" placeholder="eLama audience id (опц.)" style="min-width:10rem;max-width:14rem">
-                    <button type="button" class="btn-muted" onclick="pushLegalElama()">В eLama (email на экране)</button>
-                </div>
             </div>
             <div class="card">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
@@ -1009,79 +996,9 @@
             return '';
         }
 
-        async function loadLegalSheetSettings() {
-            const meta = document.getElementById('legalSheetMeta');
-            const inp = document.getElementById('legalSheetUrl');
-            try {
-                const r = await fetch('/api/legal/settings');
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                if (inp) inp.value = d.sheet_url || '';
-                if (meta) meta.textContent = d.sheet_modified ? ('Последнее изменение в Drive: ' + d.sheet_modified) : (d.sheet_url ? '' : 'Ссылка не сохранена');
-            } catch (e) {
-                if (meta) meta.textContent = '';
-            }
-        }
-
-        async function saveLegalSheetSettings() {
-            const url = (document.getElementById('legalSheetUrl')?.value || '').trim();
-            try {
-                const r = await fetch('/api/legal/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                await loadLegalSheetSettings();
-                alert('Ссылка сохранена');
-            } catch (e) { alert(e.message); }
-        }
-
-        async function syncLegalFromSheet() {
-            try {
-                const r = await fetch('/api/legal/sync', { method: 'POST' });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                alert(`Строк в таблице: ${d.row_count}. Создано: ${d.created}, обновлено: ${d.updated}, пропущено: ${d.skipped}`);
-                await loadLegalCrm();
-            } catch (e) { alert(e.message); }
-        }
-
-        async function pushLegalZvonok() {
-            const campaign_id = (document.getElementById('legalZvonokCampaign')?.value || '').trim() || null;
-            const lead_ids = legalLeadsData.map(r => r.id);
-            try {
-                const r = await fetch('/api/legal/integrations/zvonok', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lead_ids, campaign_id }),
-                });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || d.error || 'Ошибка');
-                let msg = d.ok ? `OK. Номеров в запросе: ${d.phones_sent ?? '—'}. Лидов в выборке: ${d.leads_considered ?? lead_ids.length}` : (d.error || 'Сбой');
-                if (d.body_preview) msg += '\n\nОтвет API (фрагмент):\n' + String(d.body_preview).slice(0, 500);
-                alert(msg);
-            } catch (e) { alert(e.message); }
-        }
-
-        async function pushLegalElama() {
-            const audience_id = (document.getElementById('legalElamaAudience')?.value || '').trim() || null;
-            const lead_ids = legalLeadsData.map(r => r.id);
-            try {
-                const r = await fetch('/api/legal/integrations/elama', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lead_ids, audience_id }),
-                });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || d.error || 'Ошибка');
-                let msg = d.ok ? `OK. Email в запросе: ${d.emails_sent ?? '—'}. Лидов в выборке: ${d.leads_considered ?? lead_ids.length}` : (d.error || 'Сбой');
-                if (d.body_preview) msg += '\n\nОтвет API (фрагмент):\n' + String(d.body_preview).slice(0, 500);
-                alert(msg);
-            } catch (e) { alert(e.message); }
-        }
-
         async function loadLegalCrm() {
             const wrap = document.getElementById('legalTableWrap');
             if (wrap) wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
-            await loadLegalSheetSettings();
             try {
                 let url = '/api/legal/leads';
                 const qp = [];

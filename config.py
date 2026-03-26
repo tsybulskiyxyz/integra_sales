@@ -8,6 +8,7 @@ load_dotenv()
 # Google Sheets
 GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH", "credentials/service_account.json")
 GOOGLE_SHEET_URL = os.getenv("GOOGLE_SHEET_URL", "")
+GOOGLE_LEGAL_SHEET_URL = os.getenv("GOOGLE_LEGAL_SHEET_URL", "").strip()
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

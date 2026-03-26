@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-from config import GOOGLE_SHEET_URL, SESSION_SECRET, APP_BASE_URL, TELEGRAM_CHAT_ID
+from config import GOOGLE_SHEET_URL, GOOGLE_LEGAL_SHEET_URL, SESSION_SECRET, APP_BASE_URL, TELEGRAM_CHAT_ID
 from database import (
     init_db,
     add_comment,
@@ -58,9 +58,6 @@ from database import (
     legal_lead_add_event,
     legal_lead_events,
     legal_import_upsert_row,
-    get_crm_setting,
-    set_crm_setting,
-    CRM_SETTING_LEGAL_SHEET_URL,
     legal_lead_get,
 )
 from google_sheets import (
@@ -68,10 +65,7 @@ from google_sheets import (
     debug_colors,
     get_spreadsheet_last_modified,
     fetch_legal_sheet_rows,
-    extract_sheet_id,
 )
-from integrations.zvonok import push_phones
-from integrations.elama import push_emails
 from integrations.smtp_send import send_bulk_plain, parse_recipients, smtp_configured, smtp_settings_from_env
 from stats import calculate_stats
 from telegram_bot import send_reminder, send_task_to_role, send_task_reminder, send_telegram, send_document, send_photo, add_task_status_keyboard, send_task_status_to_recipient, send_task_from_worker, send_weekly_report, set_bot_commands
@@ -339,36 +333,12 @@ class LegalLeadEventInput(BaseModel):
     description: str
 
 
-class LegalSheetSettingsBody(BaseModel):
-    url: str = ""
-
-
-class LegalIntegrationPushBody(BaseModel):
-    lead_ids: Optional[list[int]] = None
-    campaign_id: Optional[str] = None
-    audience_id: Optional[str] = None
-
-
 LEGAL_LEAD_STATUS_LABELS = {
     "pool": "В базе (обзвон/рассылка)",
     "outreach": "В обработке",
     "qualified": "Квалифицирован",
     "stop": "Стоп / не целевой",
 }
-
-
-def _resolve_legal_leads_for_push(lead_ids: Optional[list[int]]) -> list[dict]:
-    if lead_ids is not None:
-        out: list[dict] = []
-        for lid in lead_ids:
-            row = legal_lead_get(int(lid))
-            if row:
-                out.append(row)
-        return out
-    acc: list[dict] = []
-    for st in ("pool", "outreach"):
-        acc.extend(legal_leads_list(st))
-    return acc
 
 
 @app.get("/favicon.ico")
@@ -637,36 +607,15 @@ async def api_legal_lead_add_event(request: Request, lead_id: int, data: LegalLe
     return {"ok": True}
 
 
-@app.get("/api/legal/settings")
-async def api_legal_settings_get(request: Request):
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    url = get_crm_setting(CRM_SETTING_LEGAL_SHEET_URL).strip()
-    mod = get_spreadsheet_last_modified(url) if url else None
-    return {"sheet_url": url, "sheet_modified": mod}
-
-
-@app.post("/api/legal/settings")
-async def api_legal_settings_post(request: Request, data: LegalSheetSettingsBody):
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    url = (data.url or "").strip()
-    if url and not extract_sheet_id(url):
-        raise HTTPException(400, "Некорректная ссылка на Google Таблицу")
-    set_crm_setting(CRM_SETTING_LEGAL_SHEET_URL, url)
-    return {"ok": True}
-
-
 @app.post("/api/legal/sync")
 async def api_legal_sync(request: Request):
+    """Импорт строк из Google-таблицы юриков в CRM. URL — только GOOGLE_LEGAL_SHEET_URL в .env (без UI)."""
     user = _require_user(request)
     if user.get("role") not in MANAGER_ROLES:
         raise HTTPException(403, "Только менеджер")
-    url = get_crm_setting(CRM_SETTING_LEGAL_SHEET_URL).strip()
+    url = GOOGLE_LEGAL_SHEET_URL.strip()
     if not url:
-        raise HTTPException(400, "Сохраните ссылку на таблицу (поле выше), затем синхронизацию")
+        raise HTTPException(400, "В .env задайте GOOGLE_LEGAL_SHEET_URL (ссылка на таблицу юриков)")
     try:
         rows = fetch_legal_sheet_rows(url)
     except ValueError as e:
@@ -696,32 +645,6 @@ async def api_legal_sync(request: Request):
         if notes and lid and lid > 0:
             legal_lead_add_event(lid, f"Из таблицы: {notes[:800]}", "note")
     return {"ok": True, "row_count": len(rows), "created": created, "updated": updated, "skipped": skipped}
-
-
-@app.post("/api/legal/integrations/zvonok")
-async def api_legal_zvonok(request: Request, data: LegalIntegrationPushBody):
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    leads = _resolve_legal_leads_for_push(data.lead_ids)
-    campaign_id = (data.campaign_id or "").strip() or None
-    phones = [l["phone"] for l in leads if (l.get("phone") or "").strip()]
-    result = push_phones(phones, campaign_id)
-    result["leads_considered"] = len(leads)
-    return result
-
-
-@app.post("/api/legal/integrations/elama")
-async def api_legal_elama(request: Request, data: LegalIntegrationPushBody):
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    leads = _resolve_legal_leads_for_push(data.lead_ids)
-    audience_id = (data.audience_id or "").strip() or None
-    emails = [l["email"] for l in leads if (l.get("email") or "").strip()]
-    result = push_emails(emails, audience_id)
-    result["leads_considered"] = len(leads)
-    return result
 
 
 @app.get("/api/legal/export")

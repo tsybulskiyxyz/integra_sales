@@ -146,13 +146,6 @@ def init_db():
             conn.commit()
         except Exception:
             pass
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS crm_settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL DEFAULT ''
-            );
-        """)
-        conn.commit()
         _migrate_legal_lead_statuses(conn)
         conn.commit()
     finally:
@@ -170,31 +163,6 @@ def _migrate_legal_lead_statuses(conn):
     )
     for old, new in mapping:
         conn.execute("UPDATE legal_leads SET status = ? WHERE status = ?", (new, old))
-
-
-CRM_SETTING_LEGAL_SHEET_URL = "legal_sheet_url"
-
-
-def get_crm_setting(key: str) -> str:
-    conn = get_connection()
-    try:
-        row = conn.execute("SELECT value FROM crm_settings WHERE key = ?", (key,)).fetchone()
-        return (row[0] if row else "") or ""
-    finally:
-        conn.close()
-
-
-def set_crm_setting(key: str, value: str):
-    conn = get_connection()
-    try:
-        conn.execute(
-            """INSERT INTO crm_settings (key, value) VALUES (?, ?)
-               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
-            (key, value or ""),
-        )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def save_auth_token(token: str, contact_id: int, name: str, role: str, telegram_id: str, expires_at: str):
