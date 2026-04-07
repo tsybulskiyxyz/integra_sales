@@ -738,6 +738,7 @@ async def api_legal_sync(request: Request):
         "skipped": skipped,
         "skipped_by_color": pack.get("skipped_by_color", 0),
         "color_filter_applied": pack.get("color_filter_active", False),
+        "color_read_failed": pack.get("color_read_failed", False),
     }
 
 

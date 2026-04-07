@@ -103,6 +103,46 @@ def _get_row_color(row_data: dict) -> RowStatus:
     return RowStatus.UNKNOWN
 
 
+def _sheet_grid_row_colors(
+    service,
+    sheet_id: str,
+    sheet_name: str,
+    n_value_rows: int,
+    end_col: str,
+) -> tuple[list[dict], bool]:
+    """
+    Та же механика, что у fetch_call_data: spreadsheets.get + includeGridData.
+    Тянем userEntered и effective backgroundColor (часто фактический фон только в effective).
+    Дополняем rowData до длины n_value_rows, чтобы индекс строки i совпадал с values.
+    """
+    last_row = max(n_value_rows + 5, 10)
+    row_colors: list[dict] = []
+    ok = False
+    try:
+        color_result = service.spreadsheets().get(
+            spreadsheetId=sheet_id,
+            ranges=[f"'{sheet_name}'!A1:{end_col}{last_row}"],
+            fields=(
+                "sheets.data.rowData.values.userEnteredFormat.backgroundColor,"
+                "sheets.data.rowData.values.effectiveFormat.backgroundColor"
+            ),
+            includeGridData=True,
+        ).execute()
+        sheets = color_result.get("sheets", [])
+        if sheets:
+            grid_data = sheets[0].get("data", [])
+            if grid_data:
+                raw = grid_data[0].get("rowData")
+                if isinstance(raw, list):
+                    row_colors = raw
+                    ok = True
+    except Exception as e:
+        print(f"[WARN] sheet grid colors ({sheet_name}): {e}")
+    if n_value_rows > 0 and len(row_colors) < n_value_rows:
+        row_colors = list(row_colors) + [{"values": []}] * (n_value_rows - len(row_colors))
+    return row_colors, ok
+
+
 def fetch_call_data(sheet_url: Optional[str] = None) -> tuple[list[CallRow], int]:
     url = sheet_url or GOOGLE_SHEET_URL
     if not url:
@@ -124,22 +164,7 @@ def fetch_call_data(sheet_url: Optional[str] = None) -> tuple[list[CallRow], int
     ).execute()
     data = values_result.get("values", [])
 
-    # 2) Цвета — запрашиваем ТОЛЬКО backgroundColor через fields
-    row_colors: list[dict] = []
-    try:
-        color_result = service.spreadsheets().get(
-            spreadsheetId=sheet_id,
-            ranges=[f"'{sheet_name}'!A1:Z{len(data) + 5}"],
-            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
-            includeGridData=True
-        ).execute()
-        sheets = color_result.get("sheets", [])
-        if sheets:
-            grid_data = sheets[0].get("data", [])
-            if grid_data:
-                row_colors = grid_data[0].get("rowData", [])
-    except Exception as e:
-        print(f"[WARN] Не удалось получить цвета: {e}")
+    row_colors, _ = _sheet_grid_row_colors(service, sheet_id, sheet_name, len(data), "Z")
 
     # Рабочие дни = количество строк где столбец A = "Call id"
     header_rows = set()
@@ -173,10 +198,8 @@ def fetch_call_data(sheet_url: Optional[str] = None) -> tuple[list[CallRow], int
         if day_index < 0:
             day_index = 0
 
-        # Статус ТОЛЬКО по цвету
-        status = RowStatus.UNKNOWN
-        if i < len(row_colors):
-            status = _get_row_color(row_colors[i])
+        # Статус ТОЛЬКО по цвету (та же сетка, что выше)
+        status = _get_row_color(row_colors[i]) if i < len(row_colors) else RowStatus.UNKNOWN
 
         rows.append(CallRow(
             row_index=i + 1,
@@ -260,13 +283,16 @@ def _legal_row_dict_from_physical_row(row: list) -> Optional[dict]:
 
 def fetch_legal_sheet_rows(sheet_url: str) -> dict:
     """
-    Два формата листа: (1) как у физиков — «Call id», телефон в C; (2) первая строка — заголовки.
+    Как fetch_call_data у физиков: те же ranges (A:Z для «Call id»-листа), та же сетка цветов.
 
-    В CRM попадают только строки с фоном зелёный / оранжевый / красный (как воронка физиков).
-    Без заливки и фиолетовый (закрыто) не импортируются. Если не удалось прочитать цвета API —
-    импортируются все подходящие по данным строки (как раньше).
+    В CRM — только строки с цветом зелёный / оранжевый / красный. Без чтения сетки импорт не делаем.
     """
-    empty = {"rows": [], "color_filter_active": False, "skipped_by_color": 0}
+    empty: dict = {
+        "rows": [],
+        "color_filter_active": False,
+        "skipped_by_color": 0,
+        "color_read_failed": False,
+    }
     if not sheet_url:
         raise ValueError("Укажите ссылку на Google таблицу (юрики)")
     sheet_id = extract_sheet_id(sheet_url)
@@ -281,40 +307,29 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
         spreadsheetId=sheet_id,
         range=f"'{sheet_name}'!A:AZ",
     ).execute()
-    data = values_result.get("values", [])
+    data = values_result.get("values", []) or []
     if not data:
-        return empty.copy()
+        return {**empty}
 
-    row_colors: list[dict] = []
-    color_filter_active = False
-    try:
-        nrows = max(len(data) + 5, 10)
-        color_result = service.spreadsheets().get(
+    is_phys = _legal_sheet_uses_physical_layout(data)
+    if is_phys:
+        values_result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            ranges=[f"'{sheet_name}'!A1:AZ{nrows}"],
-            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
-            includeGridData=True,
+            range=f"'{sheet_name}'!A:Z",
         ).execute()
-        sheets = color_result.get("sheets", [])
-        if sheets:
-            grid_data = sheets[0].get("data", [])
-            if grid_data:
-                row_colors = grid_data[0].get("rowData", []) or []
-                if row_colors:
-                    color_filter_active = True
-    except Exception as e:
-        print(f"[WARN] legal sheet import — цвета строк: {e}")
+        data = values_result.get("values", []) or []
+
+    end_col = "Z" if is_phys else "AZ"
+    row_colors, colors_ok = _sheet_grid_row_colors(service, sheet_id, sheet_name, len(data), end_col)
 
     def row_color_allows_row(i: int) -> bool:
-        if not color_filter_active:
-            return True
-        if i >= len(row_colors):
+        if not colors_ok or i >= len(row_colors):
             return False
         return _get_row_color(row_colors[i]) in LEGAL_IMPORT_ROW_STATUSES
 
     skipped_by_color = 0
 
-    if _legal_sheet_uses_physical_layout(data):
+    if is_phys:
         out: list[dict] = []
         skip = _physical_block_header_row_indices(data)
         for i, row in enumerate(data):
@@ -327,10 +342,15 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
                 skipped_by_color += 1
                 continue
             out.append(rec)
-        return {"rows": out, "color_filter_active": color_filter_active, "skipped_by_color": skipped_by_color}
+        return {
+            "rows": out,
+            "color_filter_active": colors_ok,
+            "skipped_by_color": skipped_by_color,
+            "color_read_failed": not colors_ok,
+        }
 
     if len(data) < 2:
-        return {**empty, "color_filter_active": color_filter_active}
+        return {**empty, "color_read_failed": not colors_ok, "color_filter_active": colors_ok}
 
     headers = [normalize_legal_header(str(c)) for c in data[0]]
     out = []
@@ -340,10 +360,10 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
             continue
         cells = [str(row[i]).strip() if i < len(row) else "" for i in range(len(headers))]
         rev: dict[str, str] = {}
-        for i, h in enumerate(headers):
-            if not h or i >= len(cells):
+        for j, h in enumerate(headers):
+            if not h or j >= len(cells):
                 continue
-            v = cells[i]
+            v = cells[j]
             if h not in rev:
                 rev[h] = v
             else:
@@ -362,7 +382,12 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
             skipped_by_color += 1
             continue
         out.append(parsed)
-    return {"rows": out, "color_filter_active": color_filter_active, "skipped_by_color": skipped_by_color}
+    return {
+        "rows": out,
+        "color_filter_active": colors_ok,
+        "skipped_by_color": skipped_by_color,
+        "color_read_failed": not colors_ok,
+    }
 
 
 def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
@@ -385,7 +410,7 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
         spreadsheetId=sheet_id,
         range=f"'{sheet_name}'!A:AZ",
     ).execute()
-    data = values_result.get("values", [])
+    data = values_result.get("values", []) or []
     if not data:
         return {
             "orange": [],
@@ -394,31 +419,23 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
             "rows": [],
         }
 
-    row_colors: list[dict] = []
-    try:
-        nrows = max(len(data) + 5, 10)
-        color_result = service.spreadsheets().get(
+    is_phys = _legal_sheet_uses_physical_layout(data)
+    if is_phys:
+        values_result = service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            ranges=[f"'{sheet_name}'!A1:AZ{nrows}"],
-            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
-            includeGridData=True,
+            range=f"'{sheet_name}'!A:Z",
         ).execute()
-        sheets = color_result.get("sheets", [])
-        if sheets:
-            grid_data = sheets[0].get("data", [])
-            if grid_data:
-                row_colors = grid_data[0].get("rowData", [])
-    except Exception as e:
-        print(f"[WARN] legal sheet colors: {e}")
+        data = values_result.get("values", []) or []
+
+    end_col = "Z" if is_phys else "AZ"
+    row_colors, _ = _sheet_grid_row_colors(service, sheet_id, sheet_name, len(data), end_col)
 
     color_summary = {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0}
     parsed_rows: list[dict] = []
     orange: list[dict] = []
 
     def _count_row(i: int, company: str, phone_raw: str, inn: str) -> None:
-        status = RowStatus.UNKNOWN
-        if i < len(row_colors):
-            status = _get_row_color(row_colors[i])
+        status = _get_row_color(row_colors[i]) if i < len(row_colors) else RowStatus.UNKNOWN
         st_val = status.value
         if st_val in color_summary:
             color_summary[st_val] += 1
@@ -444,7 +461,7 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
                 }
             )
 
-    if _legal_sheet_uses_physical_layout(data):
+    if is_phys:
         skip = _physical_block_header_row_indices(data)
         for i, row in enumerate(data):
             if i in skip:

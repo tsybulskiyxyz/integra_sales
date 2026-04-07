@@ -1138,10 +1138,13 @@
                 const d = await r.json();
                 if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
                 if (show) {
-                    let msg = 'Готово: к импорту по цветам (зелёный / оранжевый / красный) строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
-                    if (d.skipped_by_color) msg += '. Не тем цветом / без заливки: ' + d.skipped_by_color;
-                    if (d.color_filter_applied === false) msg += '. Цвета не прочитались — импорт всех строк с номером (как раньше).';
-                    alert(msg);
+                    if (d.color_read_failed) {
+                        alert('Не удалось прочитать цвета строк (как у физиков). Импорт не выполнен — проверьте доступ сервис-аккаунта к таблице и логи сервера.');
+                    } else {
+                        let msg = 'Готово: по цветам зелёный/оранжевый/красный в импорт строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
+                        if (d.skipped_by_color) msg += '. Пропущено (другой цвет / без заливки): ' + d.skipped_by_color;
+                        alert(msg);
+                    }
                 }
                 await loadLegalCrm();
             } catch (e) {
