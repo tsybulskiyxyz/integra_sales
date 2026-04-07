@@ -547,6 +547,7 @@
                 <div id="tabLegalCalls">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
                         <input type="text" id="legalSearch" placeholder="Поиск: компания, ИНН, телефон, ОКВЭД..." style="flex:1;min-width:200px" oninput="renderLegalTable()">
+                        <button type="button" onclick="syncLegalFromSheet()" class="btn-primary" title="Импорт из GOOGLE_LEGAL_SHEET_URL в CRM" style="padding:0.35rem 0.65rem;font-size:0.85rem">Подтянуть из таблицы</button>
                         <a href="/api/legal/export" class="btn-muted" style="text-decoration:none;display:inline-block" id="legalExportLink">Экспорт CSV</a>
                         <button onclick="openLegalCreateModal()" class="btn-green">+ Компания</button>
                     </div>
@@ -816,6 +817,8 @@
         let summaryData = {};
         let funnelSummaryData = {};
         let activeCrmMode = 'physical';
+        let legalSheetAutoSyncTried = false;
+
         let legalLeadsData = [];
         let legalSummary = {};
         let legalStatusLabels = {};
@@ -1129,8 +1132,27 @@
                 if (lc) lc.textContent = '(' + (legalSummary.due_today ?? 0) + ')';
                 renderLegalStatusFilters();
                 renderLegalTable();
+                if (!legalSheetAutoSyncTried && legalActiveFilter === 'all' && (legalSummary.total || 0) === 0) {
+                    legalSheetAutoSyncTried = true;
+                    await syncLegalFromSheet(false);
+                }
             } catch (e) {
                 if (wrap) wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+            }
+        }
+
+        async function syncLegalFromSheet(showResult) {
+            const show = showResult !== false;
+            try {
+                const r = await fetch('/api/legal/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const d = await r.json();
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
+                if (show) {
+                    alert('Готово: в таблице строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped);
+                }
+                await loadLegalCrm();
+            } catch (e) {
+                alert(e.message);
             }
         }
 
