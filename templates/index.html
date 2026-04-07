@@ -155,6 +155,38 @@
         .calls-table .econom-input { width: 100%; min-width: 0; box-sizing: border-box; }
         .calls-table .actions-cell { display: flex; gap: 0.35rem; flex-wrap: nowrap; }
         .calls-table .actions-cell button { flex-shrink: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem; white-space: nowrap; }
+        /* Юрики: 11 колонок — отдельные ширины (не путать с 6 колонками физиков) */
+        .legal-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.25rem; }
+        .legal-crm-table { table-layout: fixed; width: 100%; min-width: 72rem; }
+        .legal-crm-table th, .legal-crm-table td {
+            padding: 0.4rem 0.45rem;
+            vertical-align: middle;
+            box-sizing: border-box;
+        }
+        .legal-crm-table th:nth-child(1), .legal-crm-table td:nth-child(1) { width: 11%; min-width: 9rem; word-break: break-word; }
+        .legal-crm-table th:nth-child(2), .legal-crm-table td:nth-child(2) { width: 6rem; min-width: 5.5rem; }
+        .legal-crm-table th:nth-child(3), .legal-crm-table td:nth-child(3) { width: 7.5rem; min-width: 7rem; }
+        .legal-crm-table th:nth-child(4), .legal-crm-table td:nth-child(4) { width: 10rem; min-width: 8rem; }
+        .legal-crm-table th:nth-child(5), .legal-crm-table td:nth-child(5) { width: 4.5rem; min-width: 3.5rem; }
+        .legal-crm-table th:nth-child(6), .legal-crm-table td:nth-child(6) { width: 6.5rem; min-width: 5rem; }
+        .legal-crm-table th:nth-child(7), .legal-crm-table td:nth-child(7) { width: 4rem; min-width: 3.5rem; }
+        .legal-crm-table th:nth-child(8), .legal-crm-table td:nth-child(8) { width: 11rem; min-width: 10rem; }
+        .legal-crm-table th:nth-child(9), .legal-crm-table td:nth-child(9) { width: 15rem; min-width: 14rem; }
+        .legal-crm-table th:nth-child(10), .legal-crm-table td:nth-child(10) { width: 5.5rem; min-width: 4.5rem; }
+        .legal-crm-table th:nth-child(11), .legal-crm-table td:nth-child(11) { width: 5.25rem; min-width: 4.75rem; }
+        .legal-crm-table .status-select {
+            min-width: 0;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .legal-crm-table .econom-input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font-size: 0.72rem; }
+        .legal-crm-table .actions-cell {
+            display: table-cell;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .legal-crm-table .actions-cell button { vertical-align: middle; }
         .tasks-table { width: 100%; table-layout: fixed; }
         .tasks-table th, .tasks-table td { padding: 0.6rem 0.75rem; vertical-align: middle; }
         .tasks-table th:nth-child(1), .tasks-table td:nth-child(1) { width: 10rem; }
@@ -1255,7 +1287,7 @@
                 wrap.innerHTML = '<p style="color:var(--muted)">Нет записей. Добавьте компанию или смените фильтр.</p>';
                 return;
             }
-            wrap.innerHTML = `<table class="calls-table"><thead><tr>
+            wrap.innerHTML = `<div class="legal-table-scroll"><table class="calls-table legal-crm-table"><thead><tr>
                 <th>Компания</th><th>ИНН</th><th>Телефон</th><th>Email</th><th>ОКВЭД</th><th>Регион</th><th>Приор.</th><th>След. касание</th><th>Статус</th><th>Обновлено</th><th></th>
             </tr></thead><tbody>` + rows.map(r => {
                 const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
@@ -1279,10 +1311,10 @@
                     </select></td>
                     <td class="date-cell">${formatDateShort(r.updated_at || '') || '—'}</td>
                     <td class="actions-cell">
-                        <button onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem">История</button>
+                        <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem">История</button>
                     </td>
                 </tr>`;
-            }).join('') + '</tbody></table>';
+            }).join('') + '</tbody></table></div>';
         }
 
         async function patchLegalStatus(id, status) {
