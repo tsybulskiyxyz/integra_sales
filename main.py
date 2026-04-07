@@ -59,12 +59,15 @@ from database import (
     legal_lead_events,
     legal_import_upsert_row,
     legal_lead_get,
+    legal_dashboard_next_contact_buckets,
+    legal_inactive_for_dashboard,
 )
 from google_sheets import (
     fetch_call_data,
     debug_colors,
     get_spreadsheet_last_modified,
     fetch_legal_sheet_rows,
+    fetch_legal_sheet_dashboard_rows,
     fetch_sheet_flat_text,
 )
 from integrations.smtp_send import send_bulk_plain, parse_recipients, smtp_configured, smtp_settings_from_env
@@ -503,6 +506,86 @@ async def get_data():
             "working_days": stats.working_days,
             "avg_per_day": avg_per_day,
         },
+    }
+
+
+def _legal_normalize_phone_keys(phone: str) -> set[str]:
+    """Последние 10 цифр каждого номера в строке."""
+    out: set[str] = set()
+    for part in re.split(r"[,;]\s*", phone or ""):
+        d = re.sub(r"\D", "", part)
+        if len(d) >= 10:
+            out.add(d[-10:])
+    return out
+
+
+@app.get("/api/legal/dashboard")
+async def api_legal_dashboard(request: Request):
+    """Дашборд юриков: те же блоки, что у физиков; «Дозвонить» и сводка по цветам — из GOOGLE_LEGAL_SHEET_URL."""
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not GOOGLE_LEGAL_SHEET_URL:
+        raise HTTPException(400, "GOOGLE_LEGAL_SHEET_URL не задан в .env")
+    try:
+        sheet = fetch_legal_sheet_dashboard_rows(GOOGLE_LEGAL_SHEET_URL)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+    leads = legal_leads_list()
+    phone_to_id: dict[str, int] = {}
+    inn_to_id: dict[str, int] = {}
+    for L in leads:
+        inn = (L.get("inn") or "").strip()
+        if inn:
+            inn_to_id[inn] = int(L["id"])
+        for key in _legal_normalize_phone_keys(L.get("phone") or ""):
+            phone_to_id[key] = int(L["id"])
+
+    orange_out = []
+    for o in sheet["orange"]:
+        lead_id = None
+        sr = o.get("row_index")
+        inn = ""
+        for pr in sheet.get("rows") or []:
+            if pr.get("sheet_row") == sr:
+                inn = (pr.get("inn") or "").strip()
+                break
+        if inn and inn in inn_to_id:
+            lead_id = inn_to_id[inn]
+        else:
+            raw = (o.get("phone") or "").split(",")[0]
+            dig = re.sub(r"\D", "", raw)
+            if len(dig) >= 10:
+                lead_id = phone_to_id.get(dig[-10:])
+        row = dict(o)
+        row["lead_id"] = lead_id
+        orange_out.append(row)
+
+    overdue, today_r = legal_dashboard_next_contact_buckets()
+    inactive = legal_inactive_for_dashboard()
+    sm = legal_lead_summary()
+    cs = sheet["color_summary"]
+    summary_strip = [
+        {"label": "Всего в листе", "value": sheet["total_rows"], "color": "var(--text)"},
+        {"label": "Зелёный", "value": cs.get("green", 0), "color": "var(--green)"},
+        {"label": "Оранжевый", "value": cs.get("orange", 0), "color": "var(--accent)"},
+        {"label": "Красный", "value": cs.get("red", 0), "color": "var(--red)"},
+        {"label": "Фиолетовый", "value": cs.get("purple", 0), "color": "var(--purple)"},
+        {"label": "Без цвета", "value": cs.get("unknown", 0), "color": "var(--muted)"},
+        {"label": "Пул (CRM)", "value": sm.get("pool", 0), "color": "var(--text)"},
+        {"label": "Аутрич", "value": sm.get("outreach", 0), "color": "var(--accent)"},
+        {"label": "Квалифицирован", "value": sm.get("qualified", 0), "color": "var(--orange)"},
+        {"label": "Стоп", "value": sm.get("stop", 0), "color": "var(--muted)"},
+    ]
+    return {
+        "overdue": overdue,
+        "today_reminders": today_r,
+        "orange": orange_out,
+        "inactive": inactive,
+        "summary_strip": summary_strip,
     }
 
 

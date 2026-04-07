@@ -791,6 +791,75 @@ def _legal_row_from_sql(r: tuple) -> dict:
     }
 
 
+def legal_dashboard_next_contact_buckets() -> tuple[list[dict], list[dict]]:
+    """Просроченные и сегодняшние «касания» для дашборда (как напоминания у физиков)."""
+    leads = legal_leads_list()
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    overdue: list[dict] = []
+    today_l: list[dict] = []
+    def date_only(nc: str) -> bool:
+        return len(nc.strip()) <= 10
+
+    for L in leads:
+        if L.get("status") == "stop":
+            continue
+        nc = (L.get("next_contact_at") or "").strip()
+        if not nc:
+            continue
+        item = {
+            "phone": L.get("phone") or "",
+            "sheet_row": L["id"],
+            "client_name": L.get("company_name") or "",
+            "text": "",
+            "at": nc,
+            "recipient": "",
+            "lead_id": L["id"],
+        }
+        d = nc[:10]
+        if d < today:
+            overdue.append(item)
+        elif d == today:
+            if date_only(nc):
+                today_l.append(item)
+            elif nc[:19].replace("T", " ") <= now:
+                overdue.append(item)
+            else:
+                today_l.append(item)
+    return overdue, today_l
+
+
+def legal_inactive_for_dashboard(days: int = 3, limit: int = 15) -> list[dict]:
+    """Компании в CRM без обновления N+ дней (не стоп)."""
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    leads = legal_leads_list()
+    out: list[dict] = []
+    for L in leads:
+        if L.get("status") == "stop":
+            continue
+        ua = (L.get("updated_at") or "").strip()
+        if not ua or ua < cutoff:
+            days_silent = 0
+            if ua:
+                try:
+                    last = datetime.strptime(ua[:19], "%Y-%m-%d %H:%M:%S")
+                    days_silent = (datetime.now() - last).days
+                except Exception:
+                    pass
+            out.append(
+                {
+                    "phone": L.get("phone") or "",
+                    "sheet_row": L["id"],
+                    "name": L.get("company_name") or "",
+                    "lead_id": L["id"],
+                    "days_silent": days_silent,
+                    "last_activity": ua,
+                }
+            )
+    out.sort(key=lambda x: x.get("last_activity") or "")
+    return out[:limit]
+
+
 def legal_leads_list(
     status_filter: Optional[str] = None,
     due_only: bool = False,

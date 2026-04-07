@@ -508,7 +508,7 @@
             <div id="tabTasks" style="display:none">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
                     <span style="color:var(--muted);font-size:0.85rem">Кому какая задача и в каком статусе</span>
-                    <button onclick="loadManagerTasks()" class="btn-muted" style="padding:0.3rem 0.6rem;font-size:0.8rem">Обновить</button>
+                    <button onclick="loadManagerTasks('tasksTableWrap')" class="btn-muted" style="padding:0.3rem 0.6rem;font-size:0.8rem">Обновить</button>
                 </div>
                 <div id="tasksTableWrap"><p style="color:var(--muted)">Загрузка...</p></div>
             </div>
@@ -535,19 +535,60 @@
         </div>
 
         <div id="legalCrmWrap" style="display:none">
-            <div class="card" style="margin-bottom:1rem">
-                <h3 style="margin-bottom:0.75rem">Юрики</h3>
-                <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.75rem">Ссылка — <code>GOOGLE_LEGAL_SHEET_URL</code> в <strong>.env</strong>; импорт — <code>POST /api/legal/sync</code>. Строка таблицы: <strong>компания</strong> (название / компания / name и т.д.), <strong>телефоны</strong> и <strong>почты</strong> — одна или несколько колонок (телефон, телефоны, доп_телефон…) или несколько номеров в одной ячейке через запятую; то же для email. Номера в CRM сохраняются цифрами через запятую.</p>
-                <div class="funnel" id="legalFunnelWrap" style="font-size:0.85rem"></div>
-            </div>
-            <div class="card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
-                    <input type="text" id="legalSearch" placeholder="Поиск: компания, ИНН, телефон, ОКВЭД..." style="flex:1;min-width:200px" oninput="renderLegalTable()">
-                    <a href="/api/legal/export" class="btn-muted" style="text-decoration:none;display:inline-block" id="legalExportLink">Экспорт CSV</a>
-                    <button onclick="openLegalCreateModal()" class="btn-green">+ Компания</button>
+            <div class="card" id="legalMainCard" style="display:none">
+                <div class="tabs">
+                    <span class="tab active" id="legalTabCalls" onclick="showLegalTab('calls', this)">Целевые клиенты</span>
+                    <span class="tab" id="legalTabCallback" onclick="showLegalTab('callback', this)">Дозвонить <span id="legalCallbackCount" class="dash-card-count" style="font-size:0.75rem;background:var(--accent);color:#000;margin-left:0.3rem;padding:0.1rem 0.4rem">(0)</span></span>
+                    <span class="tab" onclick="showLegalTab('team', this)">Команда</span>
+                    <span class="tab" onclick="showLegalTab('tasks', this)">Управление</span>
+                    <span class="tab" onclick="showLegalTab('dashboard', this)">Сводка</span>
                 </div>
-                <div id="legalStatusFilters" class="filters" style="margin-bottom:0.75rem"></div>
-                <div id="legalTableWrap"></div>
+
+                <div id="tabLegalCalls">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+                        <input type="text" id="legalSearch" placeholder="Поиск: компания, ИНН, телефон, ОКВЭД..." style="flex:1;min-width:200px" oninput="renderLegalTable()">
+                        <a href="/api/legal/export" class="btn-muted" style="text-decoration:none;display:inline-block" id="legalExportLink">Экспорт CSV</a>
+                        <button onclick="openLegalCreateModal()" class="btn-green">+ Компания</button>
+                    </div>
+                    <div id="legalStatusFilters" class="filters" style="margin-bottom:0.75rem"></div>
+                    <div id="legalTableWrap"></div>
+                </div>
+
+                <div id="tabLegalCallback" style="display:none">
+                    <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0">Компании со сроком касания сегодня или раньше (статус не «Стоп»).</p>
+                    <div id="legalCallbackTableWrap"></div>
+                </div>
+
+                <div id="tabLegalTeam" style="display:none">
+                    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:0.75rem 0 1rem 0">
+                        <div style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">Добавить в команду</div>
+                        <div class="form-row" style="margin-bottom:0">
+                            <input type="text" id="legalContactName" placeholder="Имя">
+                            <select id="legalContactRole">
+                                <option value="sales_manager">Менеджер по продажам</option>
+                                <option value="estimator">Сметчица</option>
+                                <option value="engineer">Инженер</option>
+                                <option value="sales_head">Руководитель ОП</option>
+                                <option value="test">Тест</option>
+                            </select>
+                            <input type="text" id="legalContactTgId" placeholder="Telegram ID">
+                            <button type="button" onclick="addLegalContact()" class="btn-green">Добавить</button>
+                        </div>
+                    </div>
+                    <div id="legalContactsList" class="team-grid"></div>
+                </div>
+
+                <div id="tabLegalTasks" style="display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin:0.75rem 0">
+                        <span style="color:var(--muted);font-size:0.85rem">Кому какая задача и в каком статусе</span>
+                        <button onclick="loadManagerTasks('legalTasksTableWrap')" class="btn-muted" style="padding:0.3rem 0.6rem;font-size:0.8rem">Обновить</button>
+                    </div>
+                    <div id="legalTasksTableWrap"><p style="color:var(--muted)">Загрузка...</p></div>
+                </div>
+
+                <div id="tabLegalDashboard" style="display:none">
+                    <div id="legalDashContent" style="margin-top:0.75rem"><p class="dash-empty">Загрузка...</p></div>
+                </div>
             </div>
         </div>
 
@@ -791,9 +832,7 @@
             { key: 'waiting', label: 'Ушли в долгое ожидание' },
             { key: 'proposal_sent', label: 'Выслано КП' },
             { key: 'closed', label: 'Закрыт' },
-            { key: 'contractors', label: 'Подрядчики' },
             { key: 'rejected', label: 'Отказ' },
-            { key: 'low_interest', label: 'Не особо интересно' },
         ];
 
         const FUNNEL_STAGES = [
@@ -940,10 +979,24 @@
             const pw = document.getElementById('physicalCrmWrap');
             const lw = document.getElementById('legalCrmWrap');
             const mw = document.getElementById('mailCrmWrap');
+            const lm = document.getElementById('legalMainCard');
             if (pw) pw.style.display = mode === 'physical' ? '' : 'none';
             if (lw) lw.style.display = mode === 'legal' ? '' : 'none';
             if (mw) mw.style.display = mode === 'mail' ? '' : 'none';
-            if (mode === 'legal') loadLegalCrm();
+            if (lm) lm.style.display = mode === 'legal' ? 'block' : 'none';
+            if (mode === 'legal') {
+                (async () => {
+                    await loadLegalCrm();
+                    document.querySelectorAll('#legalMainCard .tabs .tab').forEach(t => t.classList.remove('active'));
+                    const first = document.getElementById('legalTabCalls');
+                    if (first) first.classList.add('active');
+                    const ids = ['tabLegalCalls', 'tabLegalCallback', 'tabLegalTeam', 'tabLegalTasks', 'tabLegalDashboard'];
+                    ids.forEach((id, i) => {
+                        const e = document.getElementById(id);
+                        if (e) e.style.display = i === 0 ? 'block' : 'none';
+                    });
+                })();
+            }
             if (mode === 'mail') loadBulkMailStatus();
         }
 
@@ -1072,7 +1125,8 @@
                 legalLeadsData = d.leads || [];
                 legalSummary = d.summary || {};
                 legalStatusLabels = d.status_labels || {};
-                renderLegalFunnel();
+                const lc = document.getElementById('legalCallbackCount');
+                if (lc) lc.textContent = '(' + (legalSummary.due_today ?? 0) + ')';
                 renderLegalStatusFilters();
                 renderLegalTable();
             } catch (e) {
@@ -1080,18 +1134,67 @@
             }
         }
 
-        function renderLegalFunnel() {
-            const wrap = document.getElementById('legalFunnelWrap');
+        function showLegalTab(tab, el) {
+            document.querySelectorAll('#legalMainCard .tabs .tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            document.getElementById('tabLegalCalls').style.display = tab === 'calls' ? 'block' : 'none';
+            document.getElementById('tabLegalCallback').style.display = tab === 'callback' ? 'block' : 'none';
+            document.getElementById('tabLegalTeam').style.display = tab === 'team' ? 'block' : 'none';
+            document.getElementById('tabLegalTasks').style.display = tab === 'tasks' ? 'block' : 'none';
+            document.getElementById('tabLegalDashboard').style.display = tab === 'dashboard' ? 'block' : 'none';
+            if (tab === 'calls') renderLegalTable();
+            if (tab === 'callback') renderLegalCallback();
+            if (tab === 'team') loadLegalContacts();
+            if (tab === 'tasks') loadManagerTasks('legalTasksTableWrap');
+            if (tab === 'dashboard') loadLegalDashboard();
+        }
+
+        async function renderLegalCallback() {
+            const wrap = document.getElementById('legalCallbackTableWrap');
             if (!wrap) return;
-            const s = legalSummary;
-            const total = s.total || 0;
-            const dueN = s.due_today ?? 0;
-            const parts = [`Всего: ${total}`, `Пора звонить: ${dueN}`];
-            LEGAL_STATUS_KEYS.forEach(k => {
-                const lbl = legalStatusLabels[k] || k;
-                parts.push(`${lbl}: ${s[k] || 0}`);
-            });
-            wrap.innerHTML = `<span style="color:var(--muted)">${parts.join(' · ')}</span>`;
+            wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
+            try {
+                const r = await fetch('/api/legal/leads?due=1');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                const rows = d.leads || [];
+                if (!rows.length) {
+                    wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет компаний с наступившим сроком касания</p>';
+                    return;
+                }
+                const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+                wrap.innerHTML = `<table class="calls-table"><thead><tr>
+                    <th>Компания</th><th>Телефон</th><th>Email</th><th>След. касание</th><th></th>
+                </tr></thead><tbody>` + rows.map(r => {
+                    const tel = (r.phone || '').split(',')[0].replace(/\D/g,'');
+                    return `<tr>
+                        <td><strong>${esc(r.company_name)}</strong></td>
+                        <td>${esc(r.phone)}</td>
+                        <td>${esc(r.email)}</td>
+                        <td class="date-cell">${esc((r.next_contact_at || '').slice(0, 16))}</td>
+                        <td class="actions-cell">
+                            ${tel ? `<a href="tel:${tel}" class="btn-green" style="padding:0.25rem 0.75rem;font-size:0.85rem;text-decoration:none">Позвонить</a>` : '—'}
+                            <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem;margin-left:0.35rem">История</button>
+                        </td>
+                    </tr>`;
+                }).join('') + '</tbody></table>';
+            } catch (e) {
+                wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+            }
+        }
+
+        async function loadLegalDashboard() {
+            const wrap = document.getElementById('legalDashContent');
+            if (!wrap) return;
+            wrap.innerHTML = '<p class="dash-empty">Загрузка...</p>';
+            try {
+                const r = await fetch('/api/legal/dashboard');
+                const d = await r.json();
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
+                renderLegalDashboard(d);
+            } catch (e) {
+                wrap.innerHTML = `<p class="error">${e.message}</p>`;
+            }
         }
 
         function renderLegalStatusFilters() {
@@ -1407,6 +1510,105 @@
             `;
         }
 
+        function renderLegalDashboard(d) {
+            const wrap = document.getElementById('legalDashContent');
+            if (!wrap) return;
+
+            const overdueHtml = d.overdue.length
+                ? d.overdue.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${(r.phone || '').replace(/</g,'')}</div>
+                        <div class="dash-item-name">${r.client_name || ''}</div>
+                    </div>
+                    <div class="dash-item-meta" style="color:var(--red)">${(r.at || '').slice(0, 16)}</div>
+                    <div class="dash-item-action">
+                        <button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem">История</button>
+                    </div>
+                </div>`).join('')
+                : '<p class="dash-empty">Нет просроченных</p>';
+
+            const todayHtml = d.today_reminders.length
+                ? d.today_reminders.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${(r.phone || '').replace(/</g,'')}</div>
+                        <div class="dash-item-name">${r.client_name || ''} — ${r.text || ''}</div>
+                    </div>
+                    <div class="dash-item-meta">${(r.at || '').slice(11, 16)}</div>
+                </div>`).join('')
+                : '<p class="dash-empty">Нет напоминаний на сегодня</p>';
+
+            const orangeHtml = d.orange.length
+                ? d.orange.map(r => {
+                    const raw = (r.phone || '').split(/[,;]/)[0] || '';
+                    const tel = raw.replace(/\D/g, '');
+                    const hist = r.lead_id ? `<button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem;margin-left:0.35rem">История</button>` : '';
+                    return `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${(r.phone || '').replace(/</g,'')}</div>
+                        <div class="dash-item-name">${(r.company_name || r.creation_time || '').replace(/</g,'&lt;')}</div>
+                    </div>
+                    <div class="dash-item-action">
+                        ${tel.length >= 10 ? `<a href="tel:${tel}" class="btn-green" style="padding:0.2rem 0.5rem;font-size:0.8rem;text-decoration:none">📞</a>` : ''}
+                        ${hist}
+                    </div>
+                </div>`;
+                }).join('')
+                : '<p class="dash-empty">Все дозвонились</p>';
+
+            const inactiveHtml = d.inactive.length
+                ? d.inactive.map(r => `<div class="dash-item">
+                    <div class="dash-item-info">
+                        <div class="dash-item-phone">${(r.phone || '').replace(/</g,'')}</div>
+                        <div class="dash-item-name">${(r.name || '').replace(/</g,'&lt;')}</div>
+                    </div>
+                    <div class="dash-item-meta">${r.days_silent ? r.days_silent + ' дн.' : '—'}</div>
+                    <div class="dash-item-action">
+                        <button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem">История</button>
+                    </div>
+                </div>`).join('')
+                : '<p class="dash-empty">Все клиенты активны</p>';
+
+            const strip = (d.summary_strip || []).map(it => `
+                    <div class="dash-summary-item">
+                        <div class="dash-summary-val" style="color:${it.color}">${it.value}</div>
+                        <div class="dash-summary-label">${it.label}</div>
+                    </div>`).join('');
+
+            wrap.innerHTML = `
+                <div class="dash-grid">
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>🔴 Просрочено</h4>
+                            <span class="dash-card-count" style="background:var(--red)">${d.overdue.length}</span>
+                        </div>
+                        <div class="dash-card-body">${overdueHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>⏰ Напоминания сегодня</h4>
+                            <span class="dash-card-count" style="background:var(--orange)">${d.today_reminders.length}</span>
+                        </div>
+                        <div class="dash-card-body">${todayHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>📞 Дозвонить</h4>
+                            <span class="dash-card-count" style="background:var(--accent);color:#000">${d.orange.length}</span>
+                        </div>
+                        <div class="dash-card-body">${orangeHtml}</div>
+                    </div>
+                    <div class="dash-card">
+                        <div class="dash-card-header">
+                            <h4>😴 Без активности 3+ дня</h4>
+                            <span class="dash-card-count" style="background:var(--muted)">${d.inactive.length}</span>
+                        </div>
+                        <div class="dash-card-body">${inactiveHtml}</div>
+                    </div>
+                </div>
+                <div class="dash-summary">${strip}</div>
+            `;
+        }
+
         async function sendWeeklyReport() {
             try {
                 const r = await fetch('/api/weekly-report', { method: 'POST' });
@@ -1536,9 +1738,8 @@
                                         <option value="waiting" ${r.local_status==='waiting'?'selected':''}>Ушли в долгое ожидание</option>
                                         <option value="proposal_sent" ${r.local_status==='proposal_sent'?'selected':''}>Выслано КП</option>
                                         <option value="closed" ${r.local_status==='closed'?'selected':''}>Закрыт</option>
-                                        <option value="contractors" ${r.local_status==='contractors'?'selected':''}>Подрядчики</option>
                                         <option value="rejected" ${r.local_status==='rejected'?'selected':''}>Отказ</option>
-                                        <option value="low_interest" ${r.local_status==='low_interest'?'selected':''}>Не особо интересно</option>
+                                        ${(r.local_status === 'contractors' || r.local_status === 'low_interest') ? `<option value="${r.local_status}" selected>${(typeof statusLabelsRu !== 'undefined' && statusLabelsRu[r.local_status]) ? statusLabelsRu[r.local_status] : r.local_status}</option>` : ''}
                                     </select>
                                 </td>
                                 <td class="actions-cell">
@@ -1557,7 +1758,7 @@
         let dataLoaded = false;
 
         function showTab(tab, el) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#mainCard .tabs .tab').forEach(t => t.classList.remove('active'));
             el.classList.add('active');
             document.getElementById('tabDashboard').style.display = tab === 'dashboard' ? 'block' : 'none';
             document.getElementById('tabCalls').style.display = tab === 'calls' ? 'block' : 'none';
@@ -1568,7 +1769,7 @@
             if (tab === 'calls' && !dataLoaded) { loadData(); }
             if (tab === 'calls' && dataLoaded) { renderCalls(); }
             if (tab === 'team') loadContacts();
-            if (tab === 'tasks') loadManagerTasks();
+            if (tab === 'tasks') loadManagerTasks('tasksTableWrap');
             if (tab === 'callback' && dataLoaded) renderCallback();
             if (tab === 'callback' && !dataLoaded) { loadData().then(() => renderCallback()); }
         }
@@ -1889,12 +2090,14 @@
             document.getElementById('contactName').value = '';
             document.getElementById('contactTgId').value = '';
             loadContacts();
+            loadLegalContacts();
         }
 
         async function deleteContact(id) {
             if (!confirm('Удалить контакт?')) return;
             await fetch('/api/contact/' + id, { method: 'DELETE' });
             loadContacts();
+            loadLegalContacts();
         }
 
         const roleLabels = { sales_manager: 'Менеджер по продажам', estimator: 'Сметчица', engineer: 'Инженер', sales_head: 'Руководитель ОП', test: 'Тест' };
@@ -2019,6 +2222,51 @@
             `).join('');
         }
 
+        async function addLegalContact() {
+            const name = document.getElementById('legalContactName').value.trim();
+            const role = document.getElementById('legalContactRole').value;
+            const tg = document.getElementById('legalContactTgId').value.trim() || null;
+            if (!name) { alert('Введите имя'); return; }
+            const r = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, role, telegram_id: tg })
+            });
+            if (!r.ok) {
+                const d = await r.json();
+                alert('Ошибка: ' + (d.detail || 'Неизвестная ошибка'));
+                return;
+            }
+            document.getElementById('legalContactName').value = '';
+            document.getElementById('legalContactTgId').value = '';
+            loadLegalContacts();
+        }
+
+        async function deleteLegalContact(id) {
+            if (!confirm('Удалить контакт?')) return;
+            await fetch('/api/contact/' + id, { method: 'DELETE' });
+            loadLegalContacts();
+        }
+
+        async function loadLegalContacts() {
+            const list = document.getElementById('legalContactsList');
+            if (!list) return;
+            const r = await fetch('/api/contacts');
+            const d = await r.json();
+            if (!(d.contacts || []).length) {
+                list.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет контактов</p>';
+                return;
+            }
+            list.innerHTML = (d.contacts || []).map(c => `
+                <div class="team-card">
+                    <button type="button" class="tc-del" onclick="deleteLegalContact(${c.id})" title="Удалить">✕</button>
+                    <div class="tc-name">${c.name}</div>
+                    <span class="tc-role tc-role-${c.role}">${roleLabels[c.role] || c.role}</span>
+                    <div class="tc-tg">📱 ${c.telegram_id || '—'}</div>
+                </div>
+            `).join('');
+        }
+
         const clientStatusLabels = {
             first_contact: 'Первый контакт', negotiation: 'Переговоры', waiting: 'Ушли в долгое ожидание',
             proposal_sent: 'Выслано КП', closed: 'Закрыт', rejected: 'Отказ', low_interest: 'Не особо интересно',
@@ -2026,8 +2274,14 @@
         const taskStatusLabels = { new: 'Новая', in_progress: 'В работе', done: 'Готово' };
         const taskStatusColors = { new: 'var(--accent)', in_progress: 'var(--orange)', done: 'var(--green)' };
 
-        async function loadManagerTasks() {
-            const wrap = document.getElementById('tasksTableWrap');
+        function refreshManagerTasks() {
+            loadManagerTasks('tasksTableWrap');
+            loadManagerTasks('legalTasksTableWrap');
+        }
+
+        async function loadManagerTasks(wrapId) {
+            const wrap = document.getElementById(wrapId || 'tasksTableWrap');
+            if (!wrap) return;
             try {
                 const r = await fetch('/api/all-tasks');
                 if (r.status === 401) { location.href = '/login'; return; }
@@ -2103,7 +2357,7 @@
                     body: JSON.stringify({ task_id: taskId, status })
                 });
                 if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
-                loadManagerTasks();
+                refreshManagerTasks();
             } catch (e) { alert(e.message); }
         }
 
@@ -2112,7 +2366,7 @@
             try {
                 const r = await fetch('/api/task/' + taskId, { method: 'DELETE' });
                 if (!r.ok) { const d = await r.json(); alert(d.detail || 'Ошибка'); return; }
-                loadManagerTasks();
+                refreshManagerTasks();
             } catch (e) { alert(e.message); }
         }
 

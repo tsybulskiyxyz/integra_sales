@@ -270,6 +270,121 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
     return out
 
 
+def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
+    """
+    Строки таблицы юрлиц с цветом фона (как у физиков: зелёный / оранжевый / красный / фиолетовый).
+    Используется для блока «Дозвонить» и сводки по цветам.
+    """
+    if not sheet_url:
+        raise ValueError("Укажите ссылку на Google таблицу (юрики)")
+
+    sheet_id = extract_sheet_id(sheet_url)
+    if not sheet_id:
+        raise ValueError("Некорректная ссылка на Google таблицу")
+
+    service = _get_sheets_service()
+    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    sheet_name = meta["sheets"][0]["properties"]["title"]
+
+    values_result = service.spreadsheets().values().get(
+        spreadsheetId=sheet_id,
+        range=f"'{sheet_name}'!A:AZ",
+    ).execute()
+    data = values_result.get("values", [])
+    if len(data) < 2:
+        return {
+            "orange": [],
+            "color_summary": {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0},
+            "total_rows": 0,
+            "rows": [],
+        }
+
+    row_colors: list[dict] = []
+    try:
+        nrows = max(len(data) + 5, 10)
+        color_result = service.spreadsheets().get(
+            spreadsheetId=sheet_id,
+            ranges=[f"'{sheet_name}'!A1:AZ{nrows}"],
+            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
+            includeGridData=True,
+        ).execute()
+        sheets = color_result.get("sheets", [])
+        if sheets:
+            grid_data = sheets[0].get("data", [])
+            if grid_data:
+                row_colors = grid_data[0].get("rowData", [])
+    except Exception as e:
+        print(f"[WARN] legal sheet colors: {e}")
+
+    headers = [normalize_legal_header(str(c)) for c in data[0]]
+    color_summary = {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0}
+    parsed_rows: list[dict] = []
+    orange: list[dict] = []
+
+    for i, row in enumerate(data):
+        if i == 0:
+            continue
+        if not any(str(c).strip() for c in row[:8] if c):
+            continue
+
+        cells = [str(row[j]).strip() if j < len(row) else "" for j in range(len(headers))]
+        rev: dict[str, str] = {}
+        for j, h in enumerate(headers):
+            if not h or j >= len(cells):
+                continue
+            v = cells[j]
+            if h not in rev:
+                rev[h] = v
+            else:
+                if v:
+                    if rev[h].strip():
+                        rev[h] = rev[h].strip() + ", " + v
+                    else:
+                        rev[h] = v
+
+        parsed = legal_row_from_sheet_rev(rev)
+        company = (parsed.get("company_name") or "").strip()
+        phone_raw = (parsed.get("phone") or "").strip()
+        digits = re.sub(r"\D", "", phone_raw.split(",")[0] if phone_raw else "")
+        if not company and len(digits) < 10:
+            continue
+
+        status = RowStatus.UNKNOWN
+        if i < len(row_colors):
+            status = _get_row_color(row_colors[i])
+        st_val = status.value
+        if st_val in color_summary:
+            color_summary[st_val] += 1
+        else:
+            color_summary["unknown"] += 1
+
+        sheet_row = i + 1
+        rec = {
+            "sheet_row": sheet_row,
+            "company_name": company,
+            "phone": phone_raw,
+            "inn": (parsed.get("inn") or "").strip(),
+            "status": st_val,
+        }
+        parsed_rows.append(rec)
+        if st_val == RowStatus.ORANGE.value:
+            orange.append(
+                {
+                    "phone": phone_raw or digits,
+                    "row_index": sheet_row,
+                    "creation_time": company,
+                    "company_name": company,
+                }
+            )
+
+    return {
+        "orange": orange,
+        "color_summary": color_summary,
+        "total_rows": len(parsed_rows),
+        "rows": parsed_rows,
+    }
+
+
 def fetch_sheet_flat_text(sheet_url: str) -> str:
     """Все непустые ячейки первого листа в одну строку (для извлечения email и т.п.)."""
     if not sheet_url:
