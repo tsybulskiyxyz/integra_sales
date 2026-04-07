@@ -1,4 +1,5 @@
 """Локальная БД SQLite."""
+import re
 import sqlite3
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -900,6 +901,32 @@ def legal_lead_find_id_by_inn(inn: str) -> Optional[int]:
         conn.close()
 
 
+def _legal_phone_suffixes(phone: str) -> set[str]:
+    out: set[str] = set()
+    for part in re.split(r"[,;/\s]+", phone or ""):
+        d = re.sub(r"\D", "", part)
+        if len(d) >= 10:
+            out.add(d[-10:])
+    return out
+
+
+def legal_lead_find_id_by_phone(phone: str) -> Optional[int]:
+    keys = _legal_phone_suffixes(phone)
+    if not keys:
+        return None
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, phone FROM legal_leads WHERE phone IS NOT NULL AND TRIM(phone) != ''"
+        ).fetchall()
+        for lid, ph in rows:
+            if keys & _legal_phone_suffixes(ph or ""):
+                return int(lid)
+        return None
+    finally:
+        conn.close()
+
+
 def legal_lead_summary() -> dict[str, int]:
     conn = get_connection()
     try:
@@ -1064,38 +1091,45 @@ def legal_import_upsert_row(
     next_contact_at: str = "",
     priority: int = 0,
 ) -> tuple[str, int]:
-    """created | updated | skipped, lead_id (-1 если skipped)."""
+    """created | updated | skipped, lead_id (-1 если skipped). Совпадение: ИНН, иначе телефон."""
     cn = (company_name or "").strip()
-    if not cn:
-        return "skipped", -1
     inn = (inn or "").strip()
+    phone_s = (phone or "").strip()
+    if not cn and not inn and not phone_s:
+        return "skipped", -1
     pr = max(0, min(2, int(priority or 0)))
     nc_raw = (next_contact_at or "").strip()
     eid = legal_lead_find_id_by_inn(inn) if inn else None
+    if eid is None and phone_s:
+        eid = legal_lead_find_id_by_phone(phone_s)
     if eid:
         old = legal_lead_get(eid)
         if not old:
             return "skipped", -1
         legal_lead_update(
             eid,
-            company_name=cn,
-            inn=inn or old["inn"],
-            phone=_nz(phone),
+            company_name=cn if cn else None,
+            inn=inn if inn else None,
+            phone=_nz(phone_s) if phone_s else None,
             email=_nz(email),
             okved=_nz(okved),
             region=_nz(region),
             next_contact_at=nc_raw if nc_raw else None,
             priority=pr,
         )
-        legal_lead_add_event(eid, f"Импорт: обновление по ИНН (источник {source})", "system")
+        legal_lead_add_event(
+            eid,
+            f"Импорт: обновление ({'ИНН' if inn else 'телефон'}, источник {source})",
+            "system",
+        )
         return "updated", eid
     nid = legal_lead_create(
         cn,
         inn,
-        phone or "",
-        email or "",
-        okved or "",
-        region or "",
+        phone_s,
+        (email or "").strip(),
+        (okved or "").strip(),
+        (region or "").strip(),
         source,
         "pool",
         nc_raw,

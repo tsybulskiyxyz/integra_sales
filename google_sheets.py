@@ -222,10 +222,44 @@ def debug_colors(sheet_url: Optional[str] = None, max_rows: int = 15) -> list[di
     return out
 
 
+def _legal_sheet_uses_physical_layout(data: list) -> bool:
+    """Тот же лист, что у физиков: в столбце A встречается строка заголовка блока «Call id»."""
+    for row in data[:800]:
+        if row and len(row) > 0 and "call id" in str(row[0]).strip().lower():
+            return True
+    return False
+
+
+def _physical_block_header_row_indices(data: list) -> set[int]:
+    return {i for i, row in enumerate(data) if row and "call id" in str(row[0]).strip().lower()}
+
+
+def _legal_row_dict_from_physical_row(row: list) -> Optional[dict]:
+    """Колонки как в fetch_call_data: телефон в C (индекс 2), комментарий в I (8)."""
+    if not any(str(c).strip() for c in row[:5]):
+        return None
+    phone = str(row[2]).strip() if len(row) > 2 else ""
+    digits = re.sub(r"\D", "", phone)
+    if not digits or len(digits) < 10:
+        return None
+    comments = str(row[8]).strip() if len(row) > 8 else ""
+    return {
+        "company_name": "",
+        "inn": "",
+        "phone": phone,
+        "email": "",
+        "okved": "",
+        "region": "",
+        "next_contact_at": "",
+        "priority": 0,
+        "notes": comments,
+    }
+
+
 def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
     """
-    Первая строка листа — заголовки (как в CSV: компания, ИНН, телефон, email, ОКВЭД, регион…).
-    Дальше строки с данными. Пустые и без названия компании пропускаются.
+    Два формата: (1) как у физиков — блоки с «Call id», телефон в колонке C; (2) первая строка — заголовки.
+    Строка попадает в выдачу, если есть название и/или нормальный телефон.
     """
     if not sheet_url:
         raise ValueError("Укажите ссылку на Google таблицу (юрики)")
@@ -242,11 +276,25 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
         range=f"'{sheet_name}'!A:AZ",
     ).execute()
     data = values_result.get("values", [])
+    if not data:
+        return []
+
+    if _legal_sheet_uses_physical_layout(data):
+        out: list[dict] = []
+        skip = _physical_block_header_row_indices(data)
+        for i, row in enumerate(data):
+            if i in skip:
+                continue
+            rec = _legal_row_dict_from_physical_row(row)
+            if rec:
+                out.append(rec)
+        return out
+
     if len(data) < 2:
         return []
 
     headers = [normalize_legal_header(str(c)) for c in data[0]]
-    out: list[dict] = []
+    out = []
     for row in data[1:]:
         if not any(str(c).strip() for c in row[:6] if c):
             continue
@@ -265,7 +313,10 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
                     else:
                         rev[h] = v
         parsed = legal_row_from_sheet_rev(rev)
-        if parsed.get("company_name"):
+        cn = (parsed.get("company_name") or "").strip()
+        ph = (parsed.get("phone") or "").strip()
+        dig = re.sub(r"\D", "", ph.split(",")[0] if ph else "")
+        if cn or len(dig) >= 10:
             out.append(parsed)
     return out
 
@@ -291,7 +342,7 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
         range=f"'{sheet_name}'!A:AZ",
     ).execute()
     data = values_result.get("values", [])
-    if len(data) < 2:
+    if not data:
         return {
             "orange": [],
             "color_summary": {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0},
@@ -316,39 +367,11 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
     except Exception as e:
         print(f"[WARN] legal sheet colors: {e}")
 
-    headers = [normalize_legal_header(str(c)) for c in data[0]]
     color_summary = {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0}
     parsed_rows: list[dict] = []
     orange: list[dict] = []
 
-    for i, row in enumerate(data):
-        if i == 0:
-            continue
-        if not any(str(c).strip() for c in row[:8] if c):
-            continue
-
-        cells = [str(row[j]).strip() if j < len(row) else "" for j in range(len(headers))]
-        rev: dict[str, str] = {}
-        for j, h in enumerate(headers):
-            if not h or j >= len(cells):
-                continue
-            v = cells[j]
-            if h not in rev:
-                rev[h] = v
-            else:
-                if v:
-                    if rev[h].strip():
-                        rev[h] = rev[h].strip() + ", " + v
-                    else:
-                        rev[h] = v
-
-        parsed = legal_row_from_sheet_rev(rev)
-        company = (parsed.get("company_name") or "").strip()
-        phone_raw = (parsed.get("phone") or "").strip()
-        digits = re.sub(r"\D", "", phone_raw.split(",")[0] if phone_raw else "")
-        if not company and len(digits) < 10:
-            continue
-
+    def _count_row(i: int, company: str, phone_raw: str, inn: str) -> None:
         status = RowStatus.UNKNOWN
         if i < len(row_colors):
             status = _get_row_color(row_colors[i])
@@ -357,16 +380,16 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
             color_summary[st_val] += 1
         else:
             color_summary["unknown"] += 1
-
         sheet_row = i + 1
         rec = {
             "sheet_row": sheet_row,
             "company_name": company,
             "phone": phone_raw,
-            "inn": (parsed.get("inn") or "").strip(),
+            "inn": inn,
             "status": st_val,
         }
         parsed_rows.append(rec)
+        digits = re.sub(r"\D", "", phone_raw.split(",")[0] if phone_raw else "")
         if st_val == RowStatus.ORANGE.value:
             orange.append(
                 {
@@ -376,6 +399,55 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
                     "company_name": company,
                 }
             )
+
+    if _legal_sheet_uses_physical_layout(data):
+        skip = _physical_block_header_row_indices(data)
+        for i, row in enumerate(data):
+            if i in skip:
+                continue
+            leg = _legal_row_dict_from_physical_row(row)
+            if not leg:
+                continue
+            _count_row(i, "", leg["phone"], "")
+    else:
+        if len(data) < 2:
+            return {
+                "orange": [],
+                "color_summary": {"green": 0, "orange": 0, "red": 0, "purple": 0, "unknown": 0},
+                "total_rows": 0,
+                "rows": [],
+            }
+        headers = [normalize_legal_header(str(c)) for c in data[0]]
+        for i, row in enumerate(data):
+            if i == 0:
+                continue
+            if not any(str(c).strip() for c in row[:8] if c):
+                continue
+
+            cells = [str(row[j]).strip() if j < len(row) else "" for j in range(len(headers))]
+            rev: dict[str, str] = {}
+            for j, h in enumerate(headers):
+                if not h or j >= len(cells):
+                    continue
+                v = cells[j]
+                if h not in rev:
+                    rev[h] = v
+                else:
+                    if v:
+                        if rev[h].strip():
+                            rev[h] = rev[h].strip() + ", " + v
+                        else:
+                            rev[h] = v
+
+            parsed = legal_row_from_sheet_rev(rev)
+            company = (parsed.get("company_name") or "").strip()
+            phone_raw = (parsed.get("phone") or "").strip()
+            digits = re.sub(r"\D", "", phone_raw.split(",")[0] if phone_raw else "")
+            if not company and len(digits) < 10:
+                continue
+
+            inn = (parsed.get("inn") or "").strip()
+            _count_row(i, company, phone_raw, inn)
 
     return {
         "orange": orange,

@@ -4,27 +4,7 @@ import re
 from typing import Any
 
 LEGAL_SHEET_FIELD_ALIASES = {
-    "company_name": (
-        "company_name",
-        "название",
-        "компания",
-        "наименование",
-        "name",
-        "организация",
-        "org",
-        "полное_наименование",
-        "контрагент",
-        "наименование_контрагента",
-        "краткое_наименование",
-        "заказчик",
-        "клиент",
-        "юрлицо",
-        "юр_лицо",
-        "юридическое_лицо",
-        "поставщик",
-        "subject",
-        "title",
-    ),
+    "company_name": ("company_name", "название", "компания", "наименование", "name", "организация", "org", "полное_наименование"),
     "inn": ("inn", "инн", "инн/кпп"),
     "phone": (
         "phone",
@@ -166,42 +146,10 @@ def parse_legal_priority(val: str) -> int:
 
 
 def legal_row_from_sheet_rev(rev: dict[str, str]) -> dict[str, Any]:
-    inn = pick_legal_field(rev, "inn")
-    phone = collect_phones_from_rev(rev)
-    company_name = (pick_legal_field(rev, "company_name") or "").strip()
-    if not company_name:
-        if inn:
-            company_name = f"Компания ИНН {inn}"
-        elif phone:
-            first = phone.split(",")[0].strip()
-            company_name = f"Компания (тел. {first})"
-        else:
-            # колонка с названием под нестандартным заголовком — берём первую «текстовую» ячейку
-            skip_keys = {
-                "inn",
-                "phone",
-                "email",
-                "okved",
-                "region",
-                "next_contact_at",
-                "priority",
-                "notes",
-                *LEGAL_SHEET_FIELD_ALIASES["inn"],
-                *LEGAL_SHEET_FIELD_ALIASES["phone"],
-                *LEGAL_SHEET_FIELD_ALIASES["email"],
-            }
-            for k, v in rev.items():
-                kk = (k or "").strip().lower()
-                if kk in skip_keys or not kk:
-                    continue
-                t = (v or "").strip()
-                if len(t) >= 2 and not re.fullmatch(r"[\d\s\-+()]+", t):
-                    company_name = t
-                    break
     return {
-        "company_name": company_name,
-        "inn": inn,
-        "phone": phone,
+        "company_name": pick_legal_field(rev, "company_name"),
+        "inn": pick_legal_field(rev, "inn"),
+        "phone": collect_phones_from_rev(rev),
         "email": collect_emails_from_rev(rev),
         "okved": pick_legal_field(rev, "okved"),
         "region": pick_legal_field(rev, "region"),
