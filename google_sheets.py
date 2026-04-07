@@ -9,6 +9,8 @@ from config import GOOGLE_CREDENTIALS_PATH, GOOGLE_SHEET_URL
 from legal_sync import legal_row_from_sheet_rev, normalize_legal_header
 from models import CallRow, RowStatus
 
+# Импорт юриков в CRM: только строки с цветом строки зелёный / оранжевый / красный (как у физиков).
+LEGAL_IMPORT_ROW_STATUSES = frozenset({RowStatus.GREEN, RowStatus.ORANGE, RowStatus.RED})
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -256,11 +258,15 @@ def _legal_row_dict_from_physical_row(row: list) -> Optional[dict]:
     }
 
 
-def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
+def fetch_legal_sheet_rows(sheet_url: str) -> dict:
     """
-    Два формата: (1) как у физиков — блоки с «Call id», телефон в колонке C; (2) первая строка — заголовки.
-    Строка попадает в выдачу, если есть название и/или нормальный телефон.
+    Два формата листа: (1) как у физиков — «Call id», телефон в C; (2) первая строка — заголовки.
+
+    В CRM попадают только строки с фоном зелёный / оранжевый / красный (как воронка физиков).
+    Без заливки и фиолетовый (закрыто) не импортируются. Если не удалось прочитать цвета API —
+    импортируются все подходящие по данным строки (как раньше).
     """
+    empty = {"rows": [], "color_filter_active": False, "skipped_by_color": 0}
     if not sheet_url:
         raise ValueError("Укажите ссылку на Google таблицу (юрики)")
     sheet_id = extract_sheet_id(sheet_url)
@@ -277,7 +283,36 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
     ).execute()
     data = values_result.get("values", [])
     if not data:
-        return []
+        return empty.copy()
+
+    row_colors: list[dict] = []
+    color_filter_active = False
+    try:
+        nrows = max(len(data) + 5, 10)
+        color_result = service.spreadsheets().get(
+            spreadsheetId=sheet_id,
+            ranges=[f"'{sheet_name}'!A1:AZ{nrows}"],
+            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
+            includeGridData=True,
+        ).execute()
+        sheets = color_result.get("sheets", [])
+        if sheets:
+            grid_data = sheets[0].get("data", [])
+            if grid_data:
+                row_colors = grid_data[0].get("rowData", []) or []
+                if row_colors:
+                    color_filter_active = True
+    except Exception as e:
+        print(f"[WARN] legal sheet import — цвета строк: {e}")
+
+    def row_color_allows_row(i: int) -> bool:
+        if not color_filter_active:
+            return True
+        if i >= len(row_colors):
+            return False
+        return _get_row_color(row_colors[i]) in LEGAL_IMPORT_ROW_STATUSES
+
+    skipped_by_color = 0
 
     if _legal_sheet_uses_physical_layout(data):
         out: list[dict] = []
@@ -286,16 +321,21 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
             if i in skip:
                 continue
             rec = _legal_row_dict_from_physical_row(row)
-            if rec:
-                out.append(rec)
-        return out
+            if not rec:
+                continue
+            if not row_color_allows_row(i):
+                skipped_by_color += 1
+                continue
+            out.append(rec)
+        return {"rows": out, "color_filter_active": color_filter_active, "skipped_by_color": skipped_by_color}
 
     if len(data) < 2:
-        return []
+        return {**empty, "color_filter_active": color_filter_active}
 
     headers = [normalize_legal_header(str(c)) for c in data[0]]
     out = []
-    for row in data[1:]:
+    for row_i in range(1, len(data)):
+        row = data[row_i]
         if not any(str(c).strip() for c in row[:6] if c):
             continue
         cells = [str(row[i]).strip() if i < len(row) else "" for i in range(len(headers))]
@@ -316,9 +356,13 @@ def fetch_legal_sheet_rows(sheet_url: str) -> list[dict]:
         cn = (parsed.get("company_name") or "").strip()
         ph = (parsed.get("phone") or "").strip()
         dig = re.sub(r"\D", "", ph.split(",")[0] if ph else "")
-        if cn or len(dig) >= 10:
-            out.append(parsed)
-    return out
+        if not cn and len(dig) < 10:
+            continue
+        if not row_color_allows_row(row_i):
+            skipped_by_color += 1
+            continue
+        out.append(parsed)
+    return {"rows": out, "color_filter_active": color_filter_active, "skipped_by_color": skipped_by_color}
 
 
 def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:

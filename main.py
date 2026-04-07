@@ -702,7 +702,8 @@ async def api_legal_sync(request: Request):
     if not url:
         raise HTTPException(400, "В .env задайте GOOGLE_LEGAL_SHEET_URL (ссылка на таблицу юриков)")
     try:
-        rows = fetch_legal_sheet_rows(url)
+        pack = fetch_legal_sheet_rows(url)
+        rows = pack["rows"]
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     except Exception as e:
@@ -729,7 +730,15 @@ async def api_legal_sync(request: Request):
         notes = (d.get("notes") or "").strip()
         if notes and lid and lid > 0:
             legal_lead_add_event(lid, f"Из таблицы: {notes[:800]}", "note")
-    return {"ok": True, "row_count": len(rows), "created": created, "updated": updated, "skipped": skipped}
+    return {
+        "ok": True,
+        "row_count": len(rows),
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "skipped_by_color": pack.get("skipped_by_color", 0),
+        "color_filter_applied": pack.get("color_filter_active", False),
+    }
 
 
 @app.get("/api/legal/export")

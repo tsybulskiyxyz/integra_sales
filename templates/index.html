@@ -1138,7 +1138,10 @@
                 const d = await r.json();
                 if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
                 if (show) {
-                    alert('Готово: в таблице строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped);
+                    let msg = 'Готово: к импорту по цветам (зелёный / оранжевый / красный) строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
+                    if (d.skipped_by_color) msg += '. Не тем цветом / без заливки: ' + d.skipped_by_color;
+                    if (d.color_filter_applied === false) msg += '. Цвета не прочитались — импорт всех строк с номером (как раньше).';
+                    alert(msg);
                 }
                 await loadLegalCrm();
             } catch (e) {
