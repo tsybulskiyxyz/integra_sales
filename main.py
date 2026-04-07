@@ -626,10 +626,10 @@ async def api_legal_lead_create(request: Request, data: LegalLeadCreateInput):
     user = _require_user(request)
     if user.get("role") not in MANAGER_ROLES:
         raise HTTPException(403, "Только менеджер")
-    if not data.company_name.strip():
-        raise HTTPException(400, "Укажите название компании")
+    if not data.company_name.strip() and not (data.phone or "").strip():
+        raise HTTPException(400, "Укажите название компании или телефон")
     lead_id = legal_lead_create(
-        data.company_name,
+        data.company_name.strip(),
         data.inn or "",
         data.phone or "",
         data.email or "",

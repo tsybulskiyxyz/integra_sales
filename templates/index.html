@@ -155,38 +155,6 @@
         .calls-table .econom-input { width: 100%; min-width: 0; box-sizing: border-box; }
         .calls-table .actions-cell { display: flex; gap: 0.35rem; flex-wrap: nowrap; }
         .calls-table .actions-cell button { flex-shrink: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem; white-space: nowrap; }
-        /* Юрики: 11 колонок — отдельные ширины (не путать с 6 колонками физиков) */
-        .legal-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -0.25rem; }
-        .legal-crm-table { table-layout: fixed; width: 100%; min-width: 72rem; }
-        .legal-crm-table th, .legal-crm-table td {
-            padding: 0.4rem 0.45rem;
-            vertical-align: middle;
-            box-sizing: border-box;
-        }
-        .legal-crm-table th:nth-child(1), .legal-crm-table td:nth-child(1) { width: 11%; min-width: 9rem; word-break: break-word; }
-        .legal-crm-table th:nth-child(2), .legal-crm-table td:nth-child(2) { width: 6rem; min-width: 5.5rem; }
-        .legal-crm-table th:nth-child(3), .legal-crm-table td:nth-child(3) { width: 7.5rem; min-width: 7rem; }
-        .legal-crm-table th:nth-child(4), .legal-crm-table td:nth-child(4) { width: 10rem; min-width: 8rem; }
-        .legal-crm-table th:nth-child(5), .legal-crm-table td:nth-child(5) { width: 4.5rem; min-width: 3.5rem; }
-        .legal-crm-table th:nth-child(6), .legal-crm-table td:nth-child(6) { width: 6.5rem; min-width: 5rem; }
-        .legal-crm-table th:nth-child(7), .legal-crm-table td:nth-child(7) { width: 4rem; min-width: 3.5rem; }
-        .legal-crm-table th:nth-child(8), .legal-crm-table td:nth-child(8) { width: 11rem; min-width: 10rem; }
-        .legal-crm-table th:nth-child(9), .legal-crm-table td:nth-child(9) { width: 15rem; min-width: 14rem; }
-        .legal-crm-table th:nth-child(10), .legal-crm-table td:nth-child(10) { width: 5.5rem; min-width: 4.5rem; }
-        .legal-crm-table th:nth-child(11), .legal-crm-table td:nth-child(11) { width: 5.25rem; min-width: 4.75rem; }
-        .legal-crm-table .status-select {
-            min-width: 0;
-            width: 100%;
-            max-width: 100%;
-            box-sizing: border-box;
-        }
-        .legal-crm-table .econom-input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font-size: 0.72rem; }
-        .legal-crm-table .actions-cell {
-            display: table-cell;
-            text-align: center;
-            white-space: nowrap;
-        }
-        .legal-crm-table .actions-cell button { vertical-align: middle; }
         .tasks-table { width: 100%; table-layout: fixed; }
         .tasks-table th, .tasks-table td { padding: 0.6rem 0.75rem; vertical-align: middle; }
         .tasks-table th:nth-child(1), .tasks-table td:nth-child(1) { width: 10rem; }
@@ -1135,16 +1103,6 @@
             }
         }
 
-        function legalToDatetimeLocal(s) {
-            if (!s) return '';
-            const t = String(s).trim();
-            const m = t.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);
-            if (m) return m[1] + 'T' + m[2] + ':' + m[3];
-            const m2 = t.match(/^(\d{4}-\d{2}-\d{2})/);
-            if (m2) return m2[1] + 'T09:00';
-            return '';
-        }
-
         async function loadLegalCrm() {
             const wrap = document.getElementById('legalTableWrap');
             if (wrap) wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
@@ -1287,59 +1245,57 @@
                 wrap.innerHTML = '<p style="color:var(--muted)">Нет записей. Добавьте компанию или смените фильтр.</p>';
                 return;
             }
-            wrap.innerHTML = `<div class="legal-table-scroll"><table class="calls-table legal-crm-table"><thead><tr>
-                <th>Компания</th><th>ИНН</th><th>Телефон</th><th>Email</th><th>ОКВЭД</th><th>Регион</th><th>Приор.</th><th>След. касание</th><th>Статус</th><th>Обновлено</th><th></th>
-            </tr></thead><tbody>` + rows.map(r => {
+            wrap.innerHTML = `
+                <table class="calls-table">
+                    <thead>
+                        <tr>
+                            <th>Телефон</th>
+                            <th>Имя</th>
+                            <th>Добавлен</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                            <th>Обновлено</th>
+                        </tr>
+                    </thead>
+                    <tbody>` + rows.map(r => {
                 const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-                const pr = +r.priority || 0;
-                const dtl = legalToDatetimeLocal(r.next_contact_at || '');
-                return `<tr>
-                    <td><strong>${esc(r.company_name)}</strong><br><span style="color:var(--muted);font-size:0.7rem">${esc(r.source)}</span></td>
-                    <td>${esc(r.inn)}</td>
+                const nameVal = esc(r.company_name || '');
+                return `<tr class="row-green">
                     <td>${esc(r.phone)}</td>
-                    <td>${esc(r.email)}</td>
-                    <td>${esc(r.okved)}</td>
-                    <td>${esc(r.region)}</td>
-                    <td><select class="status-select" style="min-width:5rem" onchange="patchLegalPriority(${r.id}, this.value)">
-                        <option value="0" ${pr===0?'selected':''}>—</option>
-                        <option value="1" ${pr===1?'selected':''}>↑</option>
-                        <option value="2" ${pr===2?'selected':''}>!!</option>
-                    </select></td>
-                    <td><input type="datetime-local" class="econom-input" style="min-width:10rem;font-size:0.75rem" value="${dtl}" onchange="patchLegalNextContact(${r.id}, this)"></td>
-                    <td><select class="status-select" data-legal-id="${r.id}" onchange="patchLegalStatus(${r.id}, this.value)">
-                        ${LEGAL_STATUS_KEYS.map(k => `<option value="${k}" ${r.status===k?'selected':''}>${legalStatusLabels[k]||k}</option>`).join('')}
-                    </select></td>
-                    <td class="date-cell">${formatDateShort(r.updated_at || '') || '—'}</td>
-                    <td class="actions-cell">
-                        <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem">История</button>
+                    <td><input type="text" class="econom-input" placeholder="" value="${nameVal}" data-legal-id="${r.id}" onchange="saveLegalCompanyName(this)"></td>
+                    <td class="date-cell">${formatDateShort(r.created_at || '') || '—'}</td>
+                    <td>
+                        <select class="status-select" data-legal-id="${r.id}" onchange="patchLegalStatus(${r.id}, this.value)">
+                            ${LEGAL_STATUS_KEYS.map(k => `<option value="${k}" ${r.status===k?'selected':''}>${legalStatusLabels[k]||k}</option>`).join('')}
+                        </select>
                     </td>
+                    <td class="actions-cell">
+                        <button type="button" onclick="openLegalHistory(${r.id})" class="btn-green">Коммент</button>
+                        <button type="button" onclick="openLegalTaskModal(${r.id})" class="btn-purple">Задача</button>
+                        <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary">История</button>
+                    </td>
+                    <td class="date-cell">${formatDateShort(r.updated_at || '') || '—'}</td>
                 </tr>`;
-            }).join('') + '</tbody></table></div>';
+            }).join('') + '</tbody></table>';
+        }
+
+        async function saveLegalCompanyName(el) {
+            const id = +el.dataset.legalId;
+            if (!id) return;
+            const company_name = (el.value || '').trim();
+            try {
+                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_name }) });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+            } catch (e) {
+                alert(e.message);
+            }
+            await loadLegalCrm();
         }
 
         async function patchLegalStatus(id, status) {
             try {
                 const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                await loadLegalCrm();
-            } catch (e) { alert(e.message); loadLegalCrm(); }
-        }
-
-        async function patchLegalPriority(id, pri) {
-            try {
-                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ priority: +pri }) });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                await loadLegalCrm();
-            } catch (e) { alert(e.message); loadLegalCrm(); }
-        }
-
-        async function patchLegalNextContact(id, el) {
-            const v = el.value;
-            const next_contact_at = v ? v.replace('T', ' ') + ':00' : '';
-            try {
-                const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ next_contact_at }) });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.detail || 'Ошибка');
                 await loadLegalCrm();
@@ -1357,7 +1313,8 @@
 
         async function submitLegalCreate() {
             const company_name = (document.getElementById('legalNewName')?.value || '').trim();
-            if (!company_name) { alert('Укажите название'); return; }
+            const phone_chk = (document.getElementById('legalNewPhone')?.value || '').trim();
+            if (!company_name && !phone_chk) { alert('Укажите название или телефон'); return; }
             const ncEl = document.getElementById('legalNewNextContact');
             const ncRaw = (ncEl && ncEl.value) ? ncEl.value.replace('T', ' ') + ':00' : '';
             const body = {
@@ -1892,6 +1849,33 @@
 
         function toggleRepeat() {
             document.getElementById('repeatFields').style.display = document.getElementById('modalRepeat').checked ? 'block' : 'none';
+        }
+
+        async function openLegalTaskModal(leadId) {
+            const r = legalLeadsData.find(x => x.id === leadId);
+            if (!r) { alert('Запись не найдена'); return; }
+            const ph = (r.phone || '').split(/[,;]/)[0].trim();
+            document.getElementById('taskPhone').value = ph;
+            document.getElementById('taskRowIdx').value = '-1';
+            const cn = r.company_name || '';
+            document.getElementById('taskClientName').value = cn;
+            const name = cn || '—';
+            document.getElementById('taskClientInfo').textContent = `${ph}${name !== '—' ? ' / ' + name : ''}`;
+            document.getElementById('taskText').value = '';
+            const sel = document.getElementById('taskRecipient');
+            sel.innerHTML = '<option value="">Выберите получателя</option>';
+            try {
+                const resp = await fetch('/api/contacts');
+                const d = await resp.json();
+                (d.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        sel.innerHTML += `<option value="${c.telegram_id}" data-role="${c.role}">${c.name} — ${roleLabels[c.role] || c.role}</option>`;
+                    }
+                });
+            } catch (e) {}
+            document.getElementById('taskModalTitle').textContent = '📋 Отправить задачу';
+            document.getElementById('taskModalHint').style.display = 'none';
+            document.getElementById('taskModal').classList.add('show');
         }
 
         async function openTaskModal(idx) {
