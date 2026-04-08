@@ -339,10 +339,12 @@ class LegalLeadEventInput(BaseModel):
 
 
 LEGAL_LEAD_STATUS_LABELS = {
-    "pool": "В базе (обзвон/рассылка)",
-    "outreach": "В обработке",
-    "qualified": "Квалифицирован",
-    "stop": "Стоп / не целевой",
+    "callback": "Дозвонить",
+    "first_contact": "Первый контакт",
+    "negotiation": "Переговоры",
+    "object_quote": "Объект в просчёте",
+    "object_work": "Ведутся работы на объекте",
+    "closed": "Закрыт",
 }
 
 
@@ -575,10 +577,12 @@ async def api_legal_dashboard(request: Request):
         {"label": "Красный", "value": cs.get("red", 0), "color": "var(--red)"},
         {"label": "Фиолетовый", "value": cs.get("purple", 0), "color": "var(--purple)"},
         {"label": "Без цвета", "value": cs.get("unknown", 0), "color": "var(--muted)"},
-        {"label": "Пул (CRM)", "value": sm.get("pool", 0), "color": "var(--text)"},
-        {"label": "Аутрич", "value": sm.get("outreach", 0), "color": "var(--accent)"},
-        {"label": "Квалифицирован", "value": sm.get("qualified", 0), "color": "var(--orange)"},
-        {"label": "Стоп", "value": sm.get("stop", 0), "color": "var(--muted)"},
+        {"label": "Дозвонить", "value": sm.get("callback", 0), "color": "var(--accent)"},
+        {"label": "Первый контакт", "value": sm.get("first_contact", 0), "color": "var(--green)"},
+        {"label": "Переговоры", "value": sm.get("negotiation", 0), "color": "var(--text)"},
+        {"label": "В просчёте", "value": sm.get("object_quote", 0), "color": "var(--orange)"},
+        {"label": "Работы на объекте", "value": sm.get("object_work", 0), "color": "var(--purple)"},
+        {"label": "Закрыт", "value": sm.get("closed", 0), "color": "var(--muted)"},
     ]
     return {
         "overdue": overdue,
@@ -636,7 +640,7 @@ async def api_legal_lead_create(request: Request, data: LegalLeadCreateInput):
         data.okved or "",
         data.region or "",
         data.source or "manual",
-        "pool",
+        "first_contact",
         (data.next_contact_at or "").strip(),
         int(data.priority or 0),
     )
@@ -711,7 +715,7 @@ async def api_legal_sync(request: Request):
     created = updated = skipped = 0
     for d in rows:
         action, lid = legal_import_upsert_row(
-            d["company_name"],
+            d.get("company_name") or "",
             d.get("inn") or "",
             d.get("phone") or "",
             d.get("email") or "",
@@ -720,6 +724,7 @@ async def api_legal_sync(request: Request):
             "google_sheet",
             d.get("next_contact_at") or "",
             int(d.get("priority") or 0),
+            crm_status=d.get("crm_status") or None,
         )
         if action == "created":
             created += 1

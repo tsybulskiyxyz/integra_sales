@@ -118,7 +118,7 @@ def init_db():
                 email TEXT DEFAULT '',
                 okved TEXT DEFAULT '',
                 region TEXT DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'pool',
+                status TEXT NOT NULL DEFAULT 'first_contact',
                 notes TEXT DEFAULT '',
                 source TEXT DEFAULT 'manual',
                 next_contact_at TEXT DEFAULT '',
@@ -154,16 +154,24 @@ def init_db():
 
 
 def _migrate_legal_lead_statuses(conn):
-    """Старые статусы воронки → база / обход / квалиф. / стоп."""
+    """Миграция старых статусов → воронка юриков (цвет/этапы)."""
     mapping = (
-        ("new", "pool"),
-        ("contacted", "pool"),
-        ("engaged", "outreach"),
-        ("qualified", "qualified"),
-        ("lost", "stop"),
+        ("new", "first_contact"),
+        ("contacted", "first_contact"),
+        ("engaged", "negotiation"),
+        ("qualified", "object_quote"),
+        ("lost", "closed"),
+        ("pool", "first_contact"),
+        ("outreach", "negotiation"),
+        ("stop", "closed"),
     )
     for old, new in mapping:
         conn.execute("UPDATE legal_leads SET status = ? WHERE status = ?", (new, old))
+    ph = ",".join("?" * len(LEGAL_LEAD_STATUSES))
+    conn.execute(
+        f"UPDATE legal_leads SET status = 'first_contact' WHERE status NOT IN ({ph})",
+        tuple(LEGAL_LEAD_STATUSES),
+    )
 
 
 def save_auth_token(token: str, contact_id: int, name: str, role: str, telegram_id: str, expires_at: str):
@@ -762,7 +770,14 @@ def get_inactive_clients(days: int = 3) -> list[dict]:
         conn.close()
 
 
-LEGAL_LEAD_STATUSES = ("pool", "outreach", "qualified", "stop")
+LEGAL_LEAD_STATUSES = (
+    "callback",
+    "first_contact",
+    "negotiation",
+    "object_quote",
+    "object_work",
+    "closed",
+)
 
 
 def _legal_touch_updated(conn, lead_id: int):
@@ -782,7 +797,7 @@ def _legal_row_from_sql(r: tuple) -> dict:
         "email": r[4] or "",
         "okved": r[5] or "",
         "region": r[6] or "",
-        "status": r[7] or "pool",
+        "status": r[7] or "first_contact",
         "notes": r[8] or "",
         "source": r[9] or "",
         "next_contact_at": r[10] or "",
@@ -803,7 +818,7 @@ def legal_dashboard_next_contact_buckets() -> tuple[list[dict], list[dict]]:
         return len(nc.strip()) <= 10
 
     for L in leads:
-        if L.get("status") == "stop":
+        if L.get("status") == "closed":
             continue
         nc = (L.get("next_contact_at") or "").strip()
         if not nc:
@@ -836,7 +851,7 @@ def legal_inactive_for_dashboard(days: int = 3, limit: int = 15) -> list[dict]:
     leads = legal_leads_list()
     out: list[dict] = []
     for L in leads:
-        if L.get("status") == "stop":
+        if L.get("status") == "closed":
             continue
         ua = (L.get("updated_at") or "").strip()
         if not ua or ua < cutoff:
@@ -883,7 +898,7 @@ def legal_leads_list(
         out = [
             r
             for r in out
-            if r["status"] != "stop"
+            if r["status"] != "closed"
             and r.get("next_contact_at")
             and (r["next_contact_at"][:10] <= today)
         ]
@@ -950,12 +965,12 @@ def legal_lead_create(
     okved: str = "",
     region: str = "",
     source: str = "manual",
-    status: str = "pool",
+    status: str = "first_contact",
     next_contact_at: str = "",
     priority: int = 0,
 ) -> int:
     if status not in LEGAL_LEAD_STATUSES:
-        status = "pool"
+        status = "first_contact"
     p = max(0, min(2, int(priority)))
     conn = get_connection()
     try:
@@ -1090,6 +1105,7 @@ def legal_import_upsert_row(
     source: str = "import",
     next_contact_at: str = "",
     priority: int = 0,
+    crm_status: Optional[str] = None,
 ) -> tuple[str, int]:
     """created | updated | skipped, lead_id (-1 если skipped). Совпадение: ИНН, иначе телефон."""
     cn = (company_name or "").strip()
@@ -1102,6 +1118,7 @@ def legal_import_upsert_row(
     eid = legal_lead_find_id_by_inn(inn) if inn else None
     if eid is None and phone_s:
         eid = legal_lead_find_id_by_phone(phone_s)
+    st_sheet = crm_status if crm_status and crm_status in LEGAL_LEAD_STATUSES else None
     if eid:
         old = legal_lead_get(eid)
         if not old:
@@ -1116,6 +1133,7 @@ def legal_import_upsert_row(
             region=_nz(region),
             next_contact_at=nc_raw if nc_raw else None,
             priority=pr,
+            status=st_sheet if st_sheet and source == "google_sheet" else None,
         )
         legal_lead_add_event(
             eid,
@@ -1131,7 +1149,7 @@ def legal_import_upsert_row(
         (okved or "").strip(),
         (region or "").strip(),
         source,
-        "pool",
+        st_sheet or "first_contact",
         nc_raw,
         pr,
     )

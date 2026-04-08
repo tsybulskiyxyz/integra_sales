@@ -556,7 +556,7 @@
                 </div>
 
                 <div id="tabLegalCallback" style="display:none">
-                    <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0">Компании со сроком касания сегодня или раньше (статус не «Стоп»).</p>
+                    <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0">Компании со сроком касания сегодня или раньше (кроме «Закрыт»).</p>
                     <div id="legalCallbackTableWrap"></div>
                 </div>
 
@@ -823,7 +823,7 @@
         let legalSummary = {};
         let legalStatusLabels = {};
         let legalActiveFilter = 'all';
-        const LEGAL_STATUS_KEYS = ['pool', 'outreach', 'qualified', 'stop'];
+        const LEGAL_STATUS_KEYS = ['callback', 'first_contact', 'negotiation', 'object_quote', 'object_work', 'closed'];
         let activeFilter = 'all';
         let activePeriod = 'all';
         let activeDateFilter = 'all';
@@ -1139,10 +1139,10 @@
                 if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
                 if (show) {
                     if (d.color_read_failed) {
-                        alert('Не удалось прочитать цвета строк (как у физиков). Импорт не выполнен — проверьте доступ сервис-аккаунта к таблице и логи сервера.');
+                        alert('Не удалось прочитать цвета строк. Импорт не выполнен — проверьте доступ сервис-аккаунта к таблице и логи сервера.');
                     } else {
-                        let msg = 'Готово: по цветам зелёный/оранжевый/красный в импорт строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
-                        if (d.skipped_by_color) msg += '. Пропущено (другой цвет / без заливки): ' + d.skipped_by_color;
+                        let msg = 'Импорт: зелёный → первый контакт, оранжевый → дозвонить; красный и без цвета не тянем. Строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
+                        if (d.skipped_by_color) msg += '. Пропущено по цвету: ' + d.skipped_by_color;
                         alert(msg);
                     }
                 }
@@ -1221,7 +1221,7 @@
             const s = legalSummary;
             const dueN = s.due_today ?? 0;
             el.innerHTML = `<button class="filter-btn ${legalActiveFilter === 'all' ? 'active' : ''}" onclick="setLegalFilter('all')">Все (${s.total || 0})</button>` +
-                `<button class="filter-btn ${legalActiveFilter === 'due' ? 'active' : ''}" onclick="setLegalFilter('due')" title="Просрочено или сегодня, кроме стоп">Пора звонить (${dueN})</button>` +
+                `<button class="filter-btn ${legalActiveFilter === 'due' ? 'active' : ''}" onclick="setLegalFilter('due')" title="Просрочено или сегодня, кроме закрытых">Пора звонить (${dueN})</button>` +
                 LEGAL_STATUS_KEYS.map(k => {
                     const lbl = legalStatusLabels[k] || k;
                     return `<button class="filter-btn ${legalActiveFilter === k ? 'active' : ''}" onclick="setLegalFilter('${k}')">${lbl} (${s[k] || 0})</button>`;

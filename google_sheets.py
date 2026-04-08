@@ -9,8 +9,8 @@ from config import GOOGLE_CREDENTIALS_PATH, GOOGLE_SHEET_URL
 from legal_sync import legal_row_from_sheet_rev, normalize_legal_header
 from models import CallRow, RowStatus
 
-# Импорт юриков в CRM: только строки с цветом строки зелёный / оранжевый / красный (как у физиков).
-LEGAL_IMPORT_ROW_STATUSES = frozenset({RowStatus.GREEN, RowStatus.ORANGE, RowStatus.RED})
+# Импорт в CRM юриков: только зелёный и оранжевый; красный не тянем.
+LEGAL_IMPORT_ROW_STATUSES = frozenset({RowStatus.GREEN, RowStatus.ORANGE})
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -259,6 +259,16 @@ def _physical_block_header_row_indices(data: list) -> set[int]:
     return {i for i, row in enumerate(data) if row and "call id" in str(row[0]).strip().lower()}
 
 
+def _legal_row_sheet_crm_status(row_colors: list, row_index: int, colors_ok: bool) -> str:
+    """Зелёный → первый контакт, оранжевый → дозвонить (статус callback)."""
+    if not colors_ok or row_index >= len(row_colors):
+        return "first_contact"
+    st = _get_row_color(row_colors[row_index])
+    if st == RowStatus.ORANGE:
+        return "callback"
+    return "first_contact"
+
+
 def _legal_row_dict_from_physical_row(row: list) -> Optional[dict]:
     """Колонки как в fetch_call_data: телефон в C (индекс 2), комментарий в I (8)."""
     if not any(str(c).strip() for c in row[:5]):
@@ -285,7 +295,8 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
     """
     Как fetch_call_data у физиков: те же ranges (A:Z для «Call id»-листа), та же сетка цветов.
 
-    В CRM — только строки с цветом зелёный / оранжевый / красный. Без чтения сетки импорт не делаем.
+    В CRM только зелёный (→ первый контакт) и оранжевый (→ дозвонить). Красный и прочее не импортируются.
+    Без чтения сетки импорт не делаем.
     """
     empty: dict = {
         "rows": [],
@@ -341,6 +352,7 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
             if not row_color_allows_row(i):
                 skipped_by_color += 1
                 continue
+            rec["crm_status"] = _legal_row_sheet_crm_status(row_colors, i, colors_ok)
             out.append(rec)
         return {
             "rows": out,
@@ -381,6 +393,7 @@ def fetch_legal_sheet_rows(sheet_url: str) -> dict:
         if not row_color_allows_row(row_i):
             skipped_by_color += 1
             continue
+        parsed["crm_status"] = _legal_row_sheet_crm_status(row_colors, row_i, colors_ok)
         out.append(parsed)
     return {
         "rows": out,
