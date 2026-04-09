@@ -451,7 +451,14 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
     parsed_rows: list[dict] = []
     orange: list[dict] = []
 
-    def _count_row(i: int, company: str, phone_raw: str, inn: str) -> None:
+    def _count_row(
+        i: int,
+        company: str,
+        phone_raw: str,
+        inn: str,
+        *,
+        sheet_datetime: str = "",
+    ) -> None:
         status = _get_row_color(row_colors[i]) if i < len(row_colors) else RowStatus.UNKNOWN
         st_val = status.value
         if st_val in color_summary:
@@ -473,6 +480,7 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
                 {
                     "phone": phone_raw or digits,
                     "row_index": sheet_row,
+                    "creation_time": (sheet_datetime or "").strip(),
                 }
             )
 
@@ -484,7 +492,8 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
             leg = _legal_row_dict_from_physical_row(row)
             if not leg:
                 continue
-            _count_row(i, "", leg["phone"], "")
+            row_dt = str(row[4]).strip() if len(row) > 4 else ""
+            _count_row(i, "", leg["phone"], "", sheet_datetime=row_dt)
     else:
         if len(data) < 2:
             return {
