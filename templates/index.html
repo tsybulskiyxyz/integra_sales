@@ -547,7 +547,6 @@
                 <div id="tabLegalCalls">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
                         <input type="text" id="legalSearch" placeholder="Поиск: компания, ИНН, телефон, ОКВЭД..." style="flex:1;min-width:200px" oninput="renderLegalTable()">
-                        <button type="button" onclick="syncLegalFromSheet()" class="btn-primary" title="Импорт из GOOGLE_LEGAL_SHEET_URL в CRM" style="padding:0.35rem 0.65rem;font-size:0.85rem">Подтянуть из таблицы</button>
                         <a href="/api/legal/export" class="btn-muted" style="text-decoration:none;display:inline-block" id="legalExportLink">Экспорт CSV</a>
                         <button onclick="openLegalCreateModal()" class="btn-green">+ Компания</button>
                     </div>
@@ -817,13 +816,15 @@
         let summaryData = {};
         let funnelSummaryData = {};
         let activeCrmMode = 'physical';
-        let legalSheetAutoSyncTried = false;
+        let legalCrmSyncedThisVisit = false;
 
         let legalLeadsData = [];
         let legalSummary = {};
         let legalStatusLabels = {};
-        let legalActiveFilter = 'all';
-        const LEGAL_STATUS_KEYS = ['callback', 'first_contact', 'negotiation', 'object_quote', 'object_work', 'closed'];
+        let legalActiveFilter = 'first_contact';
+        /** Порядок статусов в фильтрах и в select: синхронизируется с ответом API (всегда «Первый контакт» первым). */
+        const DEFAULT_LEGAL_STATUS_FILTER_ORDER = ['first_contact', 'negotiation', 'object_quote', 'object_work', 'closed'];
+        let legalStatusFilterOrder = DEFAULT_LEGAL_STATUS_FILTER_ORDER.slice();
         let activeFilter = 'all';
         let activePeriod = 'all';
         let activeDateFilter = 'all';
@@ -988,6 +989,7 @@
             if (mw) mw.style.display = mode === 'mail' ? '' : 'none';
             if (lm) lm.style.display = mode === 'legal' ? 'block' : 'none';
             if (mode === 'legal') {
+                legalCrmSyncedThisVisit = false;
                 (async () => {
                     await loadLegalCrm();
                     document.querySelectorAll('#legalMainCard .tabs .tab').forEach(t => t.classList.remove('active'));
@@ -1103,52 +1105,45 @@
             }
         }
 
+        async function pullLegalSheetSilent() {
+            try {
+                const r = await fetch('/api/legal/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                const d = await r.json();
+                if (!r.ok) return null;
+                if (d.color_read_failed) console.warn('Юрики: не удалось прочитать цвета строк таблицы');
+                return d;
+            } catch (e) {
+                console.warn(e);
+                return null;
+            }
+        }
+
         async function loadLegalCrm() {
             const wrap = document.getElementById('legalTableWrap');
             if (wrap) wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
             try {
-                let url = '/api/legal/leads';
-                const qp = [];
-                if (legalActiveFilter === 'due') qp.push('due=1');
-                else if (legalActiveFilter !== 'all') qp.push('status=' + encodeURIComponent(legalActiveFilter));
-                if (qp.length) url += '?' + qp.join('&');
+                const lc = document.getElementById('legalCallbackCount');
+                if (!legalCrmSyncedThisVisit) {
+                    const syncRes = await pullLegalSheetSilent();
+                    legalCrmSyncedThisVisit = true;
+                    if (syncRes && lc) lc.textContent = '(' + (syncRes.orange_on_sheet ?? 0) + ')';
+                }
+                const url = '/api/legal/leads?status=' + encodeURIComponent(legalActiveFilter);
                 const r = await fetch(url);
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.detail || 'Ошибка');
                 legalLeadsData = d.leads || [];
                 legalSummary = d.summary || {};
                 legalStatusLabels = d.status_labels || {};
-                const lc = document.getElementById('legalCallbackCount');
-                if (lc) lc.textContent = '(' + (legalSummary.due_today ?? 0) + ')';
+                if (Array.isArray(d.status_filter_order) && d.status_filter_order.length) {
+                    const o = d.status_filter_order.filter(Boolean);
+                    const fc = 'first_contact';
+                    legalStatusFilterOrder = o.includes(fc) ? [fc, ...o.filter(k => k !== fc)] : o.slice();
+                }
                 renderLegalStatusFilters();
                 renderLegalTable();
-                if (!legalSheetAutoSyncTried && legalActiveFilter === 'all' && (legalSummary.total || 0) === 0) {
-                    legalSheetAutoSyncTried = true;
-                    await syncLegalFromSheet(false);
-                }
             } catch (e) {
                 if (wrap) wrap.innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
-            }
-        }
-
-        async function syncLegalFromSheet(showResult) {
-            const show = showResult !== false;
-            try {
-                const r = await fetch('/api/legal/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-                const d = await r.json();
-                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
-                if (show) {
-                    if (d.color_read_failed) {
-                        alert('Не удалось прочитать цвета строк. Импорт не выполнен — проверьте доступ сервис-аккаунта к таблице и логи сервера.');
-                    } else {
-                        let msg = 'Импорт: зелёный → первый контакт, оранжевый → дозвонить; красный и без цвета не тянем. Строк ' + d.row_count + ', новых ' + d.created + ', обновлено ' + d.updated + ', без изменений ' + d.skipped;
-                        if (d.skipped_by_color) msg += '. Пропущено по цвету: ' + d.skipped_by_color;
-                        alert(msg);
-                    }
-                }
-                await loadLegalCrm();
-            } catch (e) {
-                alert(e.message);
             }
         }
 
@@ -1172,27 +1167,31 @@
             if (!wrap) return;
             wrap.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
             try {
-                const r = await fetch('/api/legal/leads?due=1');
+                const r = await fetch('/api/legal/callback-sheet');
                 const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                const rows = d.leads || [];
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail || d) || 'Ошибка');
+                const lc = document.getElementById('legalCallbackCount');
+                if (lc) lc.textContent = '(' + (d.count ?? 0) + ')';
+                const rows = d.orange || [];
                 if (!rows.length) {
-                    wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет компаний с наступившим сроком касания</p>';
+                    wrap.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет строк с оранжевым цветом в таблице</p>';
                     return;
                 }
                 const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
                 wrap.innerHTML = `<table class="calls-table"><thead><tr>
-                    <th>Компания</th><th>Телефон</th><th>Email</th><th>След. касание</th><th></th>
+                    <th>Стр.</th><th>Компания</th><th>Телефон</th><th></th>
                 </tr></thead><tbody>` + rows.map(r => {
-                    const tel = (r.phone || '').split(',')[0].replace(/\D/g,'');
+                    const raw = (r.phone || '').split(/[,;]/)[0] || '';
+                    const tel = raw.replace(/\D/g, '');
+                    const name = (r.company_name || r.creation_time || '').trim();
+                    const hist = r.lead_id ? `<button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem;margin-left:0.35rem">История</button>` : '';
                     return `<tr>
-                        <td><strong>${esc(r.company_name)}</strong></td>
+                        <td class="date-cell">${r.row_index ?? '—'}</td>
+                        <td><strong>${esc(name)}</strong></td>
                         <td>${esc(r.phone)}</td>
-                        <td>${esc(r.email)}</td>
-                        <td class="date-cell">${esc((r.next_contact_at || '').slice(0, 16))}</td>
                         <td class="actions-cell">
-                            ${tel ? `<a href="tel:${tel}" class="btn-green" style="padding:0.25rem 0.75rem;font-size:0.85rem;text-decoration:none">Позвонить</a>` : '—'}
-                            <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem;margin-left:0.35rem">История</button>
+                            ${tel.length >= 10 ? `<a href="tel:${tel}" class="btn-green" style="padding:0.25rem 0.75rem;font-size:0.85rem;text-decoration:none">Позвонить</a>` : '—'}
+                            ${hist}
                         </td>
                     </tr>`;
                 }).join('') + '</tbody></table>';
@@ -1219,13 +1218,10 @@
             const el = document.getElementById('legalStatusFilters');
             if (!el) return;
             const s = legalSummary;
-            const dueN = s.due_today ?? 0;
-            el.innerHTML = `<button class="filter-btn ${legalActiveFilter === 'all' ? 'active' : ''}" onclick="setLegalFilter('all')">Все (${s.total || 0})</button>` +
-                `<button class="filter-btn ${legalActiveFilter === 'due' ? 'active' : ''}" onclick="setLegalFilter('due')" title="Просрочено или сегодня, кроме закрытых">Пора звонить (${dueN})</button>` +
-                LEGAL_STATUS_KEYS.map(k => {
-                    const lbl = legalStatusLabels[k] || k;
-                    return `<button class="filter-btn ${legalActiveFilter === k ? 'active' : ''}" onclick="setLegalFilter('${k}')">${lbl} (${s[k] || 0})</button>`;
-                }).join('');
+            el.innerHTML = legalStatusFilterOrder.map(k => {
+                const lbl = legalStatusLabels[k] || k;
+                return `<button class="filter-btn ${legalActiveFilter === k ? 'active' : ''}" onclick="setLegalFilter('${k}')">${lbl} (${s[k] || 0})</button>`;
+            }).join('');
         }
 
         function setLegalFilter(key) {
@@ -1272,7 +1268,7 @@
                     <td class="date-cell">${formatDateShort(r.created_at || '') || '—'}</td>
                     <td>
                         <select class="status-select" data-legal-id="${r.id}" onchange="patchLegalStatus(${r.id}, this.value)">
-                            ${LEGAL_STATUS_KEYS.map(k => `<option value="${k}" ${r.status===k?'selected':''}>${legalStatusLabels[k]||k}</option>`).join('')}
+                            ${legalStatusFilterOrder.map(k => `<option value="${k}" ${r.status===k?'selected':''}>${legalStatusLabels[k]||k}</option>`).join('')}
                         </select>
                     </td>
                     <td class="actions-cell">

@@ -339,7 +339,6 @@ class LegalLeadEventInput(BaseModel):
 
 
 LEGAL_LEAD_STATUS_LABELS = {
-    "callback": "Дозвонить",
     "first_contact": "Первый контакт",
     "negotiation": "Переговоры",
     "object_quote": "Объект в просчёте",
@@ -521,21 +520,8 @@ def _legal_normalize_phone_keys(phone: str) -> set[str]:
     return out
 
 
-@app.get("/api/legal/dashboard")
-async def api_legal_dashboard(request: Request):
-    """Дашборд юриков: те же блоки, что у физиков; «Дозвонить» и сводка по цветам — из GOOGLE_LEGAL_SHEET_URL."""
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    if not GOOGLE_LEGAL_SHEET_URL:
-        raise HTTPException(400, "GOOGLE_LEGAL_SHEET_URL не задан в .env")
-    try:
-        sheet = fetch_legal_sheet_dashboard_rows(GOOGLE_LEGAL_SHEET_URL)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(502, str(e))
-
+def _legal_orange_rows_enriched(sheet: dict) -> list[dict]:
+    """Оранжевые строки листа с привязкой к lead_id в CRM (ИНН или телефон)."""
     leads = legal_leads_list()
     phone_to_id: dict[str, int] = {}
     inn_to_id: dict[str, int] = {}
@@ -547,7 +533,7 @@ async def api_legal_dashboard(request: Request):
             phone_to_id[key] = int(L["id"])
 
     orange_out = []
-    for o in sheet["orange"]:
+    for o in sheet.get("orange") or []:
         lead_id = None
         sr = o.get("row_index")
         inn = ""
@@ -565,6 +551,25 @@ async def api_legal_dashboard(request: Request):
         row = dict(o)
         row["lead_id"] = lead_id
         orange_out.append(row)
+    return orange_out
+
+
+@app.get("/api/legal/dashboard")
+async def api_legal_dashboard(request: Request):
+    """Дашборд юриков: те же блоки, что у физиков; «Дозвонить» и сводка по цветам — из GOOGLE_LEGAL_SHEET_URL."""
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not GOOGLE_LEGAL_SHEET_URL:
+        raise HTTPException(400, "GOOGLE_LEGAL_SHEET_URL не задан в .env")
+    try:
+        sheet = fetch_legal_sheet_dashboard_rows(GOOGLE_LEGAL_SHEET_URL)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+    orange_out = _legal_orange_rows_enriched(sheet)
 
     overdue, today_r = legal_dashboard_next_contact_buckets()
     inactive = legal_inactive_for_dashboard()
@@ -577,7 +582,6 @@ async def api_legal_dashboard(request: Request):
         {"label": "Красный", "value": cs.get("red", 0), "color": "var(--red)"},
         {"label": "Фиолетовый", "value": cs.get("purple", 0), "color": "var(--purple)"},
         {"label": "Без цвета", "value": cs.get("unknown", 0), "color": "var(--muted)"},
-        {"label": "Дозвонить", "value": sm.get("callback", 0), "color": "var(--accent)"},
         {"label": "Первый контакт", "value": sm.get("first_contact", 0), "color": "var(--green)"},
         {"label": "Переговоры", "value": sm.get("negotiation", 0), "color": "var(--text)"},
         {"label": "В просчёте", "value": sm.get("object_quote", 0), "color": "var(--orange)"},
@@ -593,6 +597,24 @@ async def api_legal_dashboard(request: Request):
     }
 
 
+@app.get("/api/legal/callback-sheet")
+async def api_legal_callback_sheet(request: Request):
+    """Оранжевые строки юрлист-таблицы («Дозвонить»), как у физиков — не из статуса CRM."""
+    user = _require_user(request)
+    if user.get("role") not in MANAGER_ROLES:
+        raise HTTPException(403, "Только менеджер")
+    if not GOOGLE_LEGAL_SHEET_URL:
+        raise HTTPException(400, "GOOGLE_LEGAL_SHEET_URL не задан в .env")
+    try:
+        sheet = fetch_legal_sheet_dashboard_rows(GOOGLE_LEGAL_SHEET_URL)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(502, str(e))
+    orange = _legal_orange_rows_enriched(sheet)
+    return {"orange": orange, "count": len(orange)}
+
+
 @app.get("/api/legal/summary")
 async def api_legal_summary(request: Request):
     user = _require_user(request)
@@ -602,16 +624,19 @@ async def api_legal_summary(request: Request):
 
 
 @app.get("/api/legal/leads")
-async def api_legal_leads_list(request: Request, status: Optional[str] = None, due: Optional[int] = None):
+async def api_legal_leads_list(request: Request, status: Optional[str] = None):
     user = _require_user(request)
     if user.get("role") not in MANAGER_ROLES:
         raise HTTPException(403, "Только менеджер")
     st = status if status in LEGAL_LEAD_STATUSES else None
-    due_only = due == 1
-    leads = legal_leads_list(st, due_only=due_only)
+    leads = legal_leads_list(st, due_only=False)
     sumy = legal_lead_summary()
-    sumy["due_today"] = len(legal_leads_list(None, due_only=True))
-    return {"leads": leads, "summary": sumy, "status_labels": LEGAL_LEAD_STATUS_LABELS}
+    return {
+        "leads": leads,
+        "summary": sumy,
+        "status_labels": LEGAL_LEAD_STATUS_LABELS,
+        "status_filter_order": list(LEGAL_LEAD_STATUSES),
+    }
 
 
 @app.get("/api/legal/leads/{lead_id}")
@@ -744,6 +769,7 @@ async def api_legal_sync(request: Request):
         "skipped_by_color": pack.get("skipped_by_color", 0),
         "color_filter_applied": pack.get("color_filter_active", False),
         "color_read_failed": pack.get("color_read_failed", False),
+        "orange_on_sheet": int(pack.get("orange_on_sheet") or 0),
     }
 
 

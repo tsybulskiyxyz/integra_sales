@@ -156,6 +156,7 @@ def init_db():
 def _migrate_legal_lead_statuses(conn):
     """Миграция старых статусов → воронка юриков (цвет/этапы)."""
     mapping = (
+        ("callback", "first_contact"),
         ("new", "first_contact"),
         ("contacted", "first_contact"),
         ("engaged", "negotiation"),
@@ -770,8 +771,8 @@ def get_inactive_clients(days: int = 3) -> list[dict]:
         conn.close()
 
 
+# Порядок важен для UI: «Первый контакт» всегда первый в фильтрах/выпадающих списках (см. status_filter_order в API).
 LEGAL_LEAD_STATUSES = (
-    "callback",
     "first_contact",
     "negotiation",
     "object_quote",
