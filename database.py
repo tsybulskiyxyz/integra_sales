@@ -1136,11 +1136,6 @@ def legal_import_upsert_row(
             priority=pr,
             status=st_sheet if st_sheet and source == "google_sheet" else None,
         )
-        legal_lead_add_event(
-            eid,
-            f"Импорт: обновление ({'ИНН' if inn else 'телефон'}, источник {source})",
-            "system",
-        )
         return "updated", eid
     nid = legal_lead_create(
         cn,
@@ -1154,5 +1149,4 @@ def legal_import_upsert_row(
         nc_raw,
         pr,
     )
-    legal_lead_add_event(nid, f"Импорт ({source})", "system")
     return "created", nid

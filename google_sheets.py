@@ -260,7 +260,7 @@ def _physical_block_header_row_indices(data: list) -> set[int]:
 
 
 def _legal_row_dict_from_physical_row(row: list) -> Optional[dict]:
-    """Колонки как в fetch_call_data: телефон в C (индекс 2), комментарий в I (8)."""
+    """Колонки как в fetch_call_data: телефон в C (2), комментарий в I (8). Без заполнения «компании» с листа."""
     if not any(str(c).strip() for c in row[:5]):
         return None
     phone = str(row[2]).strip() if len(row) > 2 else ""
@@ -473,8 +473,6 @@ def fetch_legal_sheet_dashboard_rows(sheet_url: str) -> dict:
                 {
                     "phone": phone_raw or digits,
                     "row_index": sheet_row,
-                    "creation_time": company,
-                    "company_name": company,
                 }
             )
 

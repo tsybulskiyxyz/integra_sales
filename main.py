@@ -3,6 +3,7 @@ import asyncio
 import csv
 import io
 import re
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime as _dt, timedelta
 from typing import Optional
@@ -511,13 +512,93 @@ async def get_data():
 
 
 def _legal_normalize_phone_keys(phone: str) -> set[str]:
-    """Последние 10 цифр каждого номера в строке."""
+    """Последние 10 цифр каждого номера в строке (как при сопоставлении с листом и legal_leads)."""
     out: set[str] = set()
-    for part in re.split(r"[,;]\s*", phone or ""):
+    for part in re.split(r"[,;/\s]+", phone or ""):
         d = re.sub(r"\D", "", part)
         if len(d) >= 10:
             out.add(d[-10:])
     return out
+
+
+# Ключи зелёных строк листа (после sync свежие; иначе TTL — второй запрос к Sheets).
+_LEGAL_GREEN_SHEET_CACHE: dict = {"url": "", "at": 0.0, "keys": None}
+_LEGAL_GREEN_CACHE_TTL_SEC = 90.0
+
+
+def _legal_green_keys_from_import_rows(rows: list[dict]) -> set[str]:
+    keys: set[str] = set()
+    for d in rows:
+        inn = (d.get("inn") or "").strip()
+        if inn:
+            keys.add(f"inn:{inn}")
+        for k in _legal_normalize_phone_keys(d.get("phone") or ""):
+            keys.add(f"ph:{k}")
+    return keys
+
+
+def _legal_lead_matches_green_keys(lead: dict, keys: set[str]) -> bool:
+    inn = (lead.get("inn") or "").strip()
+    if inn and f"inn:{inn}" in keys:
+        return True
+    for k in _legal_normalize_phone_keys(lead.get("phone") or ""):
+        if f"ph:{k}" in keys:
+            return True
+    return False
+
+
+def _legal_refresh_green_sheet_cache(url: str, pack: dict) -> set[str]:
+    rows = pack.get("rows") or []
+    k = _legal_green_keys_from_import_rows(rows)
+    _LEGAL_GREEN_SHEET_CACHE["url"] = url
+    _LEGAL_GREEN_SHEET_CACHE["at"] = time.monotonic()
+    _LEGAL_GREEN_SHEET_CACHE["keys"] = frozenset(k)
+    return k
+
+
+def _legal_get_green_keys_for_url(url: str) -> set[str]:
+    if not url:
+        return set()
+    c = _LEGAL_GREEN_SHEET_CACHE
+    if (
+        c["url"] == url
+        and c["keys"] is not None
+        and (time.monotonic() - float(c["at"])) < _LEGAL_GREEN_CACHE_TTL_SEC
+    ):
+        return set(c["keys"])
+    pack = fetch_legal_sheet_rows(url)
+    return _legal_refresh_green_sheet_cache(url, pack)
+
+
+def _legal_filter_first_contact_by_green_sheet(leads: list[dict], sheet_url: str) -> list[dict]:
+    """Только лиды, которые сейчас есть среди зелёных строк юр-листа (как в таблице)."""
+    if not sheet_url.strip():
+        return leads
+    keys = _legal_get_green_keys_for_url(sheet_url.strip())
+    return [L for L in leads if _legal_lead_matches_green_keys(L, keys)]
+
+
+def _legal_event_is_sheet_import_noise(ev: dict) -> bool:
+    """Служебные записи синка с Google — не показываем в истории лида."""
+    t = (ev.get("type") or "").strip()
+    desc = (ev.get("description") or "").strip()
+    if t == "note" and desc.startswith("Из таблицы:"):
+        return True
+    if t == "system" and (
+        desc.startswith("Импорт (")
+        or desc.startswith("Импорт:")
+        or "Импорт: обновление" in desc
+        or "источник google_sheet" in desc
+        or "источник google_sheets" in desc
+    ):
+        return True
+    return False
+
+
+def _legal_lead_events_for_ui(lead_id: int) -> list[dict]:
+    raw = legal_lead_events(lead_id, limit=120)
+    out = [e for e in raw if not _legal_event_is_sheet_import_noise(e)]
+    return out[:50]
 
 
 def _legal_orange_rows_enriched(sheet: dict) -> list[dict]:
@@ -575,6 +656,12 @@ async def api_legal_dashboard(request: Request):
     inactive = legal_inactive_for_dashboard()
     sm = legal_lead_summary()
     cs = sheet["color_summary"]
+    sheet_url = (GOOGLE_LEGAL_SHEET_URL or "").strip()
+    fc_strip = sm.get("first_contact", 0)
+    if sheet_url:
+        fc_strip = len(
+            _legal_filter_first_contact_by_green_sheet(legal_leads_list("first_contact"), sheet_url)
+        )
     summary_strip = [
         {"label": "Всего в листе", "value": sheet["total_rows"], "color": "var(--text)"},
         {"label": "Зелёный", "value": cs.get("green", 0), "color": "var(--green)"},
@@ -582,7 +669,7 @@ async def api_legal_dashboard(request: Request):
         {"label": "Красный", "value": cs.get("red", 0), "color": "var(--red)"},
         {"label": "Фиолетовый", "value": cs.get("purple", 0), "color": "var(--purple)"},
         {"label": "Без цвета", "value": cs.get("unknown", 0), "color": "var(--muted)"},
-        {"label": "Первый контакт", "value": sm.get("first_contact", 0), "color": "var(--green)"},
+        {"label": "Первый контакт", "value": fc_strip, "color": "var(--green)"},
         {"label": "Переговоры", "value": sm.get("negotiation", 0), "color": "var(--text)"},
         {"label": "В просчёте", "value": sm.get("object_quote", 0), "color": "var(--orange)"},
         {"label": "Работы на объекте", "value": sm.get("object_work", 0), "color": "var(--purple)"},
@@ -629,8 +716,20 @@ async def api_legal_leads_list(request: Request, status: Optional[str] = None):
     if user.get("role") not in MANAGER_ROLES:
         raise HTTPException(403, "Только менеджер")
     st = status if status in LEGAL_LEAD_STATUSES else None
-    leads = legal_leads_list(st, due_only=False)
-    sumy = legal_lead_summary()
+    sheet_url = (GOOGLE_LEGAL_SHEET_URL or "").strip()
+    sumy = dict(legal_lead_summary())
+    if sheet_url:
+        fc_on_green = _legal_filter_first_contact_by_green_sheet(
+            legal_leads_list("first_contact"),
+            sheet_url,
+        )
+        sumy["first_contact"] = len(fc_on_green)
+        if st == "first_contact":
+            leads = fc_on_green
+        else:
+            leads = legal_leads_list(st, due_only=False)
+    else:
+        leads = legal_leads_list(st, due_only=False)
     return {
         "leads": leads,
         "summary": sumy,
@@ -647,7 +746,7 @@ async def api_legal_lead_detail(request: Request, lead_id: int):
     row = legal_lead_get(lead_id)
     if not row:
         raise HTTPException(404, "Не найдено")
-    return {**row, "events": legal_lead_events(lead_id), "status_labels": LEGAL_LEAD_STATUS_LABELS}
+    return {**row, "events": _legal_lead_events_for_ui(lead_id), "status_labels": LEGAL_LEAD_STATUS_LABELS}
 
 
 @app.post("/api/legal/leads")
@@ -757,9 +856,7 @@ async def api_legal_sync(request: Request):
             updated += 1
         else:
             skipped += 1
-        notes = (d.get("notes") or "").strip()
-        if notes and lid and lid > 0:
-            legal_lead_add_event(lid, f"Из таблицы: {notes[:800]}", "note")
+    _legal_refresh_green_sheet_cache(url, pack)
     return {
         "ok": True,
         "row_count": len(rows),
@@ -779,7 +876,10 @@ async def api_legal_export(request: Request, status: Optional[str] = None):
     if user.get("role") not in MANAGER_ROLES:
         raise HTTPException(403, "Только менеджер")
     st = status if status in LEGAL_LEAD_STATUSES else None
+    sheet_url = (GOOGLE_LEGAL_SHEET_URL or "").strip()
     leads = legal_leads_list(st)
+    if st == "first_contact" and sheet_url:
+        leads = _legal_filter_first_contact_by_green_sheet(leads, sheet_url)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(

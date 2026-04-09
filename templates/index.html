@@ -155,6 +155,12 @@
         .calls-table .econom-input { width: 100%; min-width: 0; box-sizing: border-box; }
         .calls-table .actions-cell { display: flex; gap: 0.35rem; flex-wrap: nowrap; }
         .calls-table .actions-cell button { flex-shrink: 0; padding: 0.3rem 0.5rem; font-size: 0.8rem; white-space: nowrap; }
+        /* Отдельно от .calls-table: там фиксированные ширины под 6 колонок физиков — для «Дозвонить» юриков колонки съезжали. */
+        .legal-callback-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+        .legal-callback-table th, .legal-callback-table td { padding: 0.55rem 0.65rem; vertical-align: middle; text-align: left; border-bottom: 1px solid var(--border); }
+        .legal-callback-table th { color: var(--muted); font-size: 0.78rem; font-weight: 600; }
+        .legal-callback-table .col-phone { min-width: 10rem; white-space: nowrap; font-size: 0.9rem; }
+        .legal-callback-table .actions-cell { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
         .tasks-table { width: 100%; table-layout: fixed; }
         .tasks-table th, .tasks-table td { padding: 0.6rem 0.75rem; vertical-align: middle; }
         .tasks-table th:nth-child(1), .tasks-table td:nth-child(1) { width: 10rem; }
@@ -555,7 +561,7 @@
                 </div>
 
                 <div id="tabLegalCallback" style="display:none">
-                    <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0">Компании со сроком касания сегодня или раньше (кроме «Закрыт»).</p>
+                    <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0">Оранжевые строки в таблице юрлиц (как у физиков). <strong>История</strong> — только если номер уже есть в «Целевые клиенты»; иначе можно добавить карточку по телефону.</p>
                     <div id="legalCallbackTableWrap"></div>
                 </div>
 
@@ -1178,20 +1184,16 @@
                     return;
                 }
                 const esc = (t) => (t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-                wrap.innerHTML = `<table class="calls-table"><thead><tr>
-                    <th>Стр.</th><th>Компания</th><th>Телефон</th><th></th>
+                wrap.innerHTML = `<table class="legal-callback-table"><thead><tr>
+                    <th class="col-phone">Телефон</th><th style="text-align:right;width:1%">Действия</th>
                 </tr></thead><tbody>` + rows.map(r => {
                     const raw = (r.phone || '').split(/[,;]/)[0] || '';
                     const tel = raw.replace(/\D/g, '');
-                    const name = (r.company_name || r.creation_time || '').trim();
-                    const hist = r.lead_id ? `<button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem;margin-left:0.35rem">История</button>` : '';
                     return `<tr>
-                        <td class="date-cell">${r.row_index ?? '—'}</td>
-                        <td><strong>${esc(name)}</strong></td>
-                        <td>${esc(r.phone)}</td>
+                        <td class="col-phone">${esc(r.phone)}</td>
                         <td class="actions-cell">
                             ${tel.length >= 10 ? `<a href="tel:${tel}" class="btn-green" style="padding:0.25rem 0.75rem;font-size:0.85rem;text-decoration:none">Позвонить</a>` : '—'}
-                            ${hist}
+                            <button type="button" onclick="legalCallbackOpenHistory(${r.lead_id || 0}, ${JSON.stringify(r.phone || '')})" class="btn-primary" style="padding:0.25rem 0.5rem;font-size:0.75rem">История</button>
                         </td>
                     </tr>`;
                 }).join('') + '</tbody></table>';
@@ -1304,12 +1306,27 @@
             } catch (e) { alert(e.message); loadLegalCrm(); }
         }
 
-        function openLegalCreateModal() {
+        function openLegalCreateModal(prefill) {
             ['legalNewName','legalNewInn','legalNewPhone','legalNewEmail','legalNewOkved','legalNewRegion'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
             const nxc = document.getElementById('legalNewNextContact'); if (nxc) nxc.value = '';
             const pr = document.getElementById('legalNewPriority'); if (pr) pr.value = '0';
             document.getElementById('legalNewSource').value = 'manual';
+            if (prefill && typeof prefill === 'object' && prefill.phone != null) {
+                const p = document.getElementById('legalNewPhone');
+                if (p) p.value = String(prefill.phone);
+            }
             document.getElementById('legalCreateModal').classList.add('show');
+        }
+
+        function legalCallbackOpenHistory(leadId, phone) {
+            const id = Number(leadId) || 0;
+            if (id > 0) {
+                openLegalHistory(id);
+                return;
+            }
+            if (confirm('Этого номера ещё нет в «Целевые клиенты». Открыть форму добавления (телефон подставим)?')) {
+                openLegalCreateModal({ phone: phone || '' });
+            }
         }
         function closeLegalCreateModal() { document.getElementById('legalCreateModal').classList.remove('show'); }
 
@@ -1554,11 +1571,10 @@
                 ? d.orange.map(r => {
                     const raw = (r.phone || '').split(/[,;]/)[0] || '';
                     const tel = raw.replace(/\D/g, '');
-                    const hist = r.lead_id ? `<button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem;margin-left:0.35rem">История</button>` : '';
+                    const hist = `<button type="button" onclick="legalCallbackOpenHistory(${r.lead_id || 0}, ${JSON.stringify(r.phone || '')})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem;margin-left:0.35rem">История</button>`;
                     return `<div class="dash-item">
                     <div class="dash-item-info">
                         <div class="dash-item-phone">${(r.phone || '').replace(/</g,'')}</div>
-                        <div class="dash-item-name">${(r.company_name || r.creation_time || '').replace(/</g,'&lt;')}</div>
                     </div>
                     <div class="dash-item-action">
                         ${tel.length >= 10 ? `<a href="tel:${tel}" class="btn-green" style="padding:0.2rem 0.5rem;font-size:0.8rem;text-decoration:none">📞</a>` : ''}
