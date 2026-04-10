@@ -72,27 +72,6 @@ def set_bot_commands():
         pass
 
 
-def get_updates(offset: int = 0, timeout: int = 1) -> tuple[list[dict], int]:
-    """Получить новые сообщения от бота (long-polling). Возвращает (updates, new_offset)."""
-    token = TELEGRAM_BOT_TOKEN
-    if not token:
-        return [], offset
-    url = f"https://api.telegram.org/bot{token}/getUpdates"
-    try:
-        with httpx.Client(timeout=timeout + 5) as client:
-            r = client.post(url, json={"offset": offset, "timeout": timeout})
-            if r.status_code != 200:
-                return [], offset
-            data = r.json()
-            updates = data.get("result", [])
-            new_offset = offset
-            if updates:
-                new_offset = updates[-1]["update_id"] + 1
-            return updates, new_offset
-    except Exception:
-        return [], offset
-
-
 def _format_history(events: list[dict], max_items: int = 5) -> str:
     """Форматирует последние события в читаемый текст."""
     if not events:

@@ -790,16 +790,66 @@
         </div>
     </div>
 
-    <div id="legalHistoryModal" class="modal">
-        <div class="modal-content" style="max-width:520px">
-            <h3 style="margin-bottom:0.5rem"><span id="legalHistTitle"></span></h3>
+    <div id="legalHistoryModal" class="modal timeline-modal">
+        <div class="modal-content">
+            <div class="timeline-header">
+                <h3 id="legalHistTitle" style="margin:0">📋 История</h3>
+            </div>
             <input type="hidden" id="legalHistLeadId">
-            <div id="legalHistList" style="max-height:240px;overflow-y:auto;margin-bottom:1rem;font-size:0.85rem;color:var(--muted)"></div>
-            <label style="color:var(--muted);font-size:0.8rem">Добавить заметку</label>
-            <textarea id="legalHistNote" rows="2" style="width:100%;margin-bottom:0.75rem"></textarea>
-            <div class="form-row" style="justify-content:flex-end;gap:0.5rem">
-                <button onclick="closeLegalHistoryModal()" class="btn-muted">Закрыть</button>
-                <button onclick="submitLegalNote()" class="btn-green">Сохранить заметку</button>
+            <div class="timeline-list" id="legalHistList"><p style="color:var(--muted)">Загрузка...</p></div>
+            <button type="button" onclick="closeLegalHistoryModal()" class="btn-muted modal-close">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="legalNoteModal" class="modal">
+        <div class="modal-content" style="max-width:440px">
+            <input type="hidden" id="legalNoteLeadId">
+            <input type="hidden" id="legalNotePhone">
+            <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.85rem;">
+                <span style="color:var(--muted)">Клиент:</span> <span id="legalNoteClientInfo" style="color:var(--accent)"></span>
+            </div>
+            <div style="display:flex;gap:0;margin-bottom:1rem">
+                <button type="button" id="legalNoteModeNote" onclick="switchLegalNoteMode('note')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.85rem">Заметка</button>
+                <button type="button" id="legalNoteModeNotify" onclick="switchLegalNoteMode('notify')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.85rem">Уведомление</button>
+            </div>
+            <div class="form-row">
+                <textarea id="legalNoteText" rows="3" placeholder="Текст..." style="width:100%"></textarea>
+            </div>
+            <div id="legalNoteNotifyFields" style="display:none">
+                <div class="form-row" style="flex-direction:column;align-items:stretch">
+                    <label style="color:var(--muted);font-size:0.8rem">Кому:</label>
+                    <select id="legalNoteRecipient" style="width:100%">
+                        <option value="">Мне (по умолчанию)</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0;margin-bottom:0.75rem">
+                    <button type="button" id="legalNoteWhenNow" onclick="switchLegalNoteWhen('now')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.8rem">Сейчас</button>
+                    <button type="button" id="legalNoteWhenLater" onclick="switchLegalNoteWhen('later')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.8rem">По времени</button>
+                </div>
+                <div id="legalNoteLaterFields" style="display:none">
+                    <div class="form-row" style="flex-direction:column;align-items:stretch">
+                        <label style="color:var(--muted);font-size:0.8rem">Дата и время:</label>
+                        <input type="datetime-local" id="legalNoteReminder" style="width:100%">
+                    </div>
+                    <div class="form-row" style="align-items:center;gap:0.75rem">
+                        <label style="color:var(--muted);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem">
+                            <input type="checkbox" id="legalNoteRepeat" onchange="toggleLegalNoteRepeat()"> Повторять
+                        </label>
+                    </div>
+                    <div id="legalNoteRepeatFields" style="display:none">
+                        <div class="form-row" style="gap:0.5rem;align-items:center">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">Каждые</label>
+                            <input type="number" id="legalNoteRepeatDays" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">дн. x</label>
+                            <input type="number" id="legalNoteRepeatCount" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">раз</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
+                <button type="button" onclick="closeLegalNoteModal()" class="btn-muted">Отмена</button>
+                <button type="button" id="legalNoteSubmitBtn" onclick="submitLegalNoteModal()" class="btn-green">Сохранить</button>
             </div>
         </div>
     </div>
@@ -1265,7 +1315,7 @@
                         </select>
                     </td>
                     <td class="actions-cell">
-                        <button type="button" onclick="openLegalHistory(${r.id})" class="btn-green">Коммент</button>
+                        <button type="button" onclick="openLegalNote(${r.id})" class="btn-green">Заметка</button>
                         <button type="button" onclick="openLegalTaskModal(${r.id})" class="btn-purple">Задача</button>
                         <button type="button" onclick="openLegalHistory(${r.id})" class="btn-primary">История</button>
                     </td>
@@ -1335,32 +1385,189 @@
 
         async function openLegalHistory(id) {
             document.getElementById('legalHistLeadId').value = id;
-            document.getElementById('legalHistNote').value = '';
             const list = document.getElementById('legalHistList');
-            list.innerHTML = 'Загрузка...';
+            const titleEl = document.getElementById('legalHistTitle');
+            list.innerHTML = '<p style="color:var(--muted)">Загрузка...</p>';
             document.getElementById('legalHistoryModal').classList.add('show');
             try {
                 const r = await fetch('/api/legal/leads/' + id);
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                document.getElementById('legalHistTitle').textContent = d.company_name || ('Лид #' + id);
-                list.innerHTML = (d.events || []).length ? (d.events || []).map(ev =>
-                    `<div style="margin-bottom:0.5rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border)">
-                        <span style="opacity:0.7">${(ev.created_at || '').slice(0, 16).replace('T', ' ')}</span> [${ev.type}]<br>${(ev.description || '').replace(/</g,'&lt;')}</div>`).join('') : '<p>Нет записей</p>';
+                const phone = (d.phone || '').split(/[,;]/)[0].trim() || (d.phone || '') || '';
+                const cn = (d.company_name || '').trim();
+                titleEl.textContent = '';
+                titleEl.appendChild(document.createTextNode('История клиента '));
+                const sp = document.createElement('span');
+                sp.style.color = 'var(--accent)';
+                sp.textContent = phone + (cn ? ' / ' + cn : '');
+                titleEl.appendChild(sp);
+                const evs = d.events || [];
+                if (!evs.length) {
+                    list.innerHTML = '<p style="color:var(--muted);padding:1rem 0">Нет событий</p>';
+                    return;
+                }
+                list.innerHTML = evs.map(e => {
+                    const dt = e.created_at ? new Date(e.created_at.replace(' ', 'T')) : null;
+                    const timeStr = dt ? dt.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const icon = EVENT_ICONS[e.type] || '•';
+                    const label = EVENT_LABELS[e.type] || e.type;
+                    const desc = (e.description || '').replace(/</g, '&lt;');
+                    return `<div class="timeline-item">
+                        <div class="tl-top">
+                            <span class="tl-icon">${icon}</span>
+                            <span class="tl-type">${label}</span>
+                            <span class="tl-time">${timeStr}</span>
+                        </div>
+                        <div class="tl-desc">${desc}</div>
+                    </div>`;
+                }).join('');
             } catch (e) { list.innerHTML = '<p style="color:var(--red)">' + e.message + '</p>'; }
         }
         function closeLegalHistoryModal() { document.getElementById('legalHistoryModal').classList.remove('show'); }
 
-        async function submitLegalNote() {
-            const id = +document.getElementById('legalHistLeadId').value;
-            const description = (document.getElementById('legalHistNote')?.value || '').trim();
-            if (!description) { alert('Введите текст'); return; }
+        let _legalNoteMode = 'note';
+        let _legalNoteWhen = 'now';
+
+        function closeLegalNoteModal() { document.getElementById('legalNoteModal').classList.remove('show'); }
+
+        async function openLegalNote(leadId) {
+            document.getElementById('legalNoteLeadId').value = leadId;
+            document.getElementById('legalNoteText').value = '';
+            document.getElementById('legalNoteReminder').value = '';
+            document.getElementById('legalNoteRepeat').checked = false;
+            toggleLegalNoteRepeat();
+            let phone = '';
             try {
-                const r = await fetch('/api/legal/leads/' + id + '/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description }) });
+                const r = await fetch('/api/legal/leads/' + leadId);
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.detail || 'Ошибка');
-                document.getElementById('legalHistNote').value = '';
-                openLegalHistory(id);
+                phone = (d.phone || '').split(/[,;]/)[0].trim() || (d.phone || '') || '';
+                document.getElementById('legalNotePhone').value = phone;
+                const cn = (d.company_name || '').trim();
+                document.getElementById('legalNoteClientInfo').textContent = `${phone}${cn ? ' / ' + cn : ''}`;
+            } catch (e) { alert(e.message); return; }
+            const sel = document.getElementById('legalNoteRecipient');
+            sel.innerHTML = '<option value="">Мне (по умолчанию)</option>';
+            try {
+                const r = await fetch('/api/contacts');
+                const d = await r.json();
+                (d.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        sel.innerHTML += `<option value="${c.telegram_id}">${c.name} (${roleLabels[c.role] || c.role})</option>`;
+                    }
+                });
+            } catch (e) {}
+            switchLegalNoteMode('note');
+            switchLegalNoteWhen('now');
+            document.getElementById('legalNoteModal').classList.add('show');
+        }
+
+        function switchLegalNoteMode(mode) {
+            _legalNoteMode = mode;
+            document.getElementById('legalNoteModeNote').style.background = mode === 'note' ? '#fff' : 'var(--bg)';
+            document.getElementById('legalNoteModeNote').style.color = mode === 'note' ? '#000' : 'var(--muted)';
+            document.getElementById('legalNoteModeNotify').style.background = mode === 'notify' ? '#fff' : 'var(--bg)';
+            document.getElementById('legalNoteModeNotify').style.color = mode === 'notify' ? '#000' : 'var(--muted)';
+            document.getElementById('legalNoteNotifyFields').style.display = mode === 'notify' ? 'block' : 'none';
+            const btn = document.getElementById('legalNoteSubmitBtn');
+            if (mode === 'note') {
+                btn.textContent = 'Сохранить';
+                btn.className = 'btn-green';
+            } else {
+                btn.textContent = 'Отправить';
+                btn.className = 'btn-purple';
+            }
+        }
+
+        function switchLegalNoteWhen(when) {
+            _legalNoteWhen = when;
+            document.getElementById('legalNoteWhenNow').style.background = when === 'now' ? '#fff' : 'var(--bg)';
+            document.getElementById('legalNoteWhenNow').style.color = when === 'now' ? '#000' : 'var(--muted)';
+            document.getElementById('legalNoteWhenLater').style.background = when === 'later' ? '#fff' : 'var(--bg)';
+            document.getElementById('legalNoteWhenLater').style.color = when === 'later' ? '#000' : 'var(--muted)';
+            document.getElementById('legalNoteLaterFields').style.display = when === 'later' ? 'block' : 'none';
+        }
+
+        function toggleLegalNoteRepeat() {
+            document.getElementById('legalNoteRepeatFields').style.display = document.getElementById('legalNoteRepeat').checked ? 'block' : 'none';
+        }
+
+        async function submitLegalNoteModal() {
+            const leadId = +document.getElementById('legalNoteLeadId').value;
+            const phone = (document.getElementById('legalNotePhone').value || '').trim();
+            const text = (document.getElementById('legalNoteText').value || '').trim();
+            if (_legalNoteMode === 'note') {
+                if (!text) { alert('Введите текст заметки'); return; }
+                try {
+                    const r = await fetch('/api/legal/leads/' + leadId + '/events', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ description: text }),
+                    });
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Ошибка');
+                    alert('Заметка сохранена');
+                    closeLegalNoteModal();
+                    await loadLegalCrm();
+                } catch (e) { alert(e.message); }
+                return;
+            }
+            if (!text) { alert('Для уведомления нужен текст'); return; }
+            if (!phone) { alert('У лида нет телефона — уведомление по номеру невозможно'); return; }
+            const recipient = document.getElementById('legalNoteRecipient').value || null;
+            if (_legalNoteWhen === 'now') {
+                try {
+                    const r = await fetch('/api/send-now', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, text, sheet_row: null, recipient_telegram_id: recipient }),
+                    });
+                    const d = await r.json();
+                    alert(d.ok ? 'Отправлено' : 'Ошибка отправки');
+                    closeLegalNoteModal();
+                    await loadLegalCrm();
+                } catch (e) { alert(e.message); }
+                return;
+            }
+            const at = document.getElementById('legalNoteReminder').value;
+            if (!at) { alert('Укажите дату и время'); return; }
+            const repeat = document.getElementById('legalNoteRepeat').checked;
+            try {
+                if (repeat) {
+                    const interval = +(document.getElementById('legalNoteRepeatDays').value || 3);
+                    const count = +(document.getElementById('legalNoteRepeatCount').value || 3);
+                    const base = new Date(at);
+                    for (let i = 0; i < count; i++) {
+                        const dt = new Date(base.getTime() + i * interval * 86400000);
+                        const ts = dt.toISOString().slice(0, 16).replace('T', ' ');
+                        await fetch('/api/reminder', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                phone,
+                                text: `[${i + 1}/${count}] ${text}`,
+                                reminder_at: ts,
+                                sheet_row: null,
+                                recipient_telegram_id: recipient,
+                            }),
+                        });
+                    }
+                    alert(`Запланировано ${count} уведомлений с интервалом ${interval} дн.`);
+                } else {
+                    await fetch('/api/reminder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone,
+                            text,
+                            reminder_at: at.replace('T', ' '),
+                            sheet_row: null,
+                            recipient_telegram_id: recipient,
+                        }),
+                    });
+                    alert('Напоминание запланировано');
+                }
+                closeLegalNoteModal();
                 await loadLegalCrm();
             } catch (e) { alert(e.message); }
         }
@@ -1528,7 +1735,8 @@
                         <div class="dash-item-name">${r.client_name || ''}</div>
                     </div>
                     <div class="dash-item-meta" style="color:var(--red)">${(r.at || '').slice(0, 16)}</div>
-                    <div class="dash-item-action">
+                    <div class="dash-item-action" style="display:flex;gap:0.25rem;flex-wrap:wrap">
+                        <button type="button" onclick="openLegalNote(${r.lead_id})" class="btn-green" style="padding:0.2rem 0.5rem;font-size:0.8rem">Заметка</button>
                         <button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem">История</button>
                     </div>
                 </div>`).join('')
@@ -1568,7 +1776,8 @@
                         <div class="dash-item-name">${(r.name || '').replace(/</g,'&lt;')}</div>
                     </div>
                     <div class="dash-item-meta">${r.days_silent ? r.days_silent + ' дн.' : '—'}</div>
-                    <div class="dash-item-action">
+                    <div class="dash-item-action" style="display:flex;gap:0.25rem;flex-wrap:wrap">
+                        <button type="button" onclick="openLegalNote(${r.lead_id})" class="btn-green" style="padding:0.2rem 0.5rem;font-size:0.8rem">Заметка</button>
                         <button type="button" onclick="openLegalHistory(${r.lead_id})" class="btn-primary" style="padding:0.2rem 0.5rem;font-size:0.8rem">История</button>
                     </div>
                 </div>`).join('')
@@ -2157,14 +2366,16 @@
             reminder_created: '⏰', reminder_sent: '📨',
             message_sent: '📤', task_sent: '📋',
             task_status: '🔄', worker_comment: '💬',
-            worker_reply: '💬', object_update: '🏠'
+            worker_reply: '💬', object_update: '🏠',
+            note: '📝', system: '⚙️'
         };
         const EVENT_LABELS = {
             comment: 'Комментарий', status_change: 'Статус', name_change: 'Имя',
             reminder_created: 'Напоминание', reminder_sent: 'Отправлено',
             message_sent: 'Сообщение', task_sent: 'Задача',
             task_status: 'Статус задачи', worker_comment: 'Комментарий сотрудника',
-            worker_reply: 'Ответ сотрудника', object_update: 'Объект'
+            worker_reply: 'Ответ сотрудника', object_update: 'Объект',
+            note: 'Заметка', system: 'Система'
         };
 
         let _tlPhone = '';

@@ -21,7 +21,6 @@ from config import GOOGLE_SHEET_URL, GOOGLE_LEGAL_SHEET_URL, SESSION_SECRET, APP
 from database import (
     init_db,
     add_comment,
-    get_comments,
     add_reminder,
     get_pending_reminders,
     mark_reminder_sent,
@@ -48,7 +47,6 @@ from database import (
     update_task_status,
     get_task_by_id,
     delete_task,
-    get_client_full_history,
     get_unfinished_tasks_for_reminder,
     record_task_reminder_sent,
     LEGAL_LEAD_STATUSES,
@@ -65,7 +63,6 @@ from database import (
 )
 from google_sheets import (
     fetch_call_data,
-    debug_colors,
     get_spreadsheet_last_modified,
     fetch_legal_sheet_rows,
     fetch_legal_sheet_dashboard_rows,
@@ -102,26 +99,6 @@ async def _reminder_loop():
         except Exception:
             pass
         await asyncio.sleep(10)
-
-
-async def _inactive_check_loop():
-    """Проверка забытых клиентов раз в день — отключена (нет create_task в lifespan)."""
-    # await asyncio.sleep(60)
-    # while True:
-    #     try:
-    #         inactive = get_inactive_clients(days=3)
-    #         if inactive:
-    #             max_show = 50
-    #             lines = [f"  • {c['phone']}{' / ' + c['name'] if c['name'] else ''} — {STATUS_LABELS.get(c['status'], c['status'])}"
-    #                      for c in inactive[:max_show]]
-    #             msg = f"⚠️ Клиенты без активности 3+ дня ({len(inactive)}):\n\n" + "\n".join(lines)
-    #             if len(inactive) > max_show:
-    #                 msg += f"\n  ...и ещё {len(inactive) - max_show}"
-    #             send_telegram(msg)
-    #     except Exception:
-    #         pass
-    #     await asyncio.sleep(24 * 3600)  # раз в сутки
-    return
 
 
 async def _task_reminder_loop():
@@ -200,13 +177,11 @@ async def lifespan(app: FastAPI):
     init_db()
     set_bot_commands()
     t1 = asyncio.create_task(_reminder_loop())
-    # t2 = asyncio.create_task(_inactive_check_loop())  # см. _inactive_check_loop — оповещения о бездействии выкл.
     t4 = asyncio.create_task(_task_reminder_loop())
     from bot import run_polling
     t3 = asyncio.create_task(run_polling())
     yield
     t1.cancel()
-    # t2.cancel()
     t3.cancel()
     t4.cancel()
 
@@ -1029,30 +1004,6 @@ async def api_mail_send(
     return result
 
 
-@app.get("/api/debug-tasks")
-async def api_debug_tasks(request: Request):
-    """Отладка: сколько задач в базе (для проверки)."""
-    user = _require_user(request)
-    if user.get("role") not in MANAGER_ROLES:
-        raise HTTPException(403, "Только менеджер")
-    from database import get_connection
-    conn = get_connection()
-    try:
-        count = conn.execute("SELECT COUNT(*) FROM task_messages").fetchone()[0]
-        rows = conn.execute(
-            "SELECT id, phone, role, status, created_at, tg_chat_id FROM task_messages ORDER BY created_at DESC LIMIT 5"
-        ).fetchall()
-        return {"count": count, "recent": [{"id": r[0], "phone": r[1], "role": r[2], "status": r[3], "created_at": r[4], "tg_chat_id": r[5]} for r in rows]}
-    finally:
-        conn.close()
-
-
-@app.get("/api/debug-colors")
-async def api_debug_colors():
-    """Отладка: сырые RGB первых строк таблицы."""
-    return debug_colors()
-
-
 STATUS_LABELS = {
     "first_contact": "Установлен первый контакт",
     "negotiation": "Переговоры",
@@ -1093,11 +1044,6 @@ async def api_add_comment(data: CommentInput):
     add_comment(data.phone, data.comment, data.sheet_row)
     add_event(data.phone, "comment", data.comment, data.sheet_row)
     return {"ok": True}
-
-
-@app.get("/api/comments/{phone}")
-async def api_get_comments(phone: str):
-    return {"comments": get_comments(phone)}
 
 
 @app.get("/api/events/{phone}")
@@ -1385,12 +1331,6 @@ async def api_send_weekly_report(request: Request):
     if not send_weekly_report(tg_id, report):
         raise HTTPException(400, "Не удалось отправить. Напишите боту /start.")
     return {"ok": True}
-
-
-@app.get("/api/client-history/{phone}")
-async def api_client_history(phone: str):
-    """Полная история взаимодействия с клиентом (все сотрудники)."""
-    return {"history": get_client_full_history(phone)}
 
 
 @app.post("/api/task")

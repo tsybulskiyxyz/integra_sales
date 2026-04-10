@@ -217,36 +217,6 @@ def fetch_call_data(sheet_url: Optional[str] = None) -> tuple[list[CallRow], int
     return rows, working_days
 
 
-def debug_colors(sheet_url: Optional[str] = None, max_rows: int = 15) -> list[dict]:
-    """Возвращает сырые RGB для первых N строк — для отладки."""
-    url = sheet_url or GOOGLE_SHEET_URL
-    sheet_id = extract_sheet_id(url)
-    service = _get_sheets_service()
-    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-    sheet_name = meta["sheets"][0]["properties"]["title"]
-
-    result = service.spreadsheets().get(
-        spreadsheetId=sheet_id,
-        ranges=[f"'{sheet_name}'!A1:C{max_rows}"],
-        fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor",
-        includeGridData=True
-    ).execute()
-
-    out = []
-    sheets = result.get("sheets", [])
-    if sheets:
-        grid = sheets[0].get("data", [{}])[0]
-        for idx, rd in enumerate(grid.get("rowData", [])):
-            cells = rd.get("values", [])
-            if cells:
-                bg = cells[0].get("userEnteredFormat", {}).get("backgroundColor")
-                status = _rgb_to_status(bg) if bg else "no_color"
-                out.append({"row": idx + 1, "bg": bg, "status": str(status)})
-            else:
-                out.append({"row": idx + 1, "bg": None, "status": "empty"})
-    return out
-
-
 def _legal_sheet_uses_physical_layout(data: list) -> bool:
     """Тот же лист, что у физиков: в столбце A встречается строка заголовка блока «Call id»."""
     for row in data[:800]:

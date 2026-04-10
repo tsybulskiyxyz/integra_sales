@@ -221,19 +221,6 @@ def add_comment(phone: str, comment: str, sheet_row: Optional[int] = None):
         conn.close()
 
 
-def get_comments(phone: str) -> list[dict]:
-    """Получить комментарии по телефону."""
-    conn = get_connection()
-    try:
-        rows = conn.execute(
-            "SELECT id, comment, sheet_row, created_at FROM comments WHERE phone = ? ORDER BY created_at DESC",
-            (phone,)
-        ).fetchall()
-        return [{"id": r[0], "comment": r[1], "sheet_row": r[2], "created_at": r[3]} for r in rows]
-    finally:
-        conn.close()
-
-
 def add_reminder(phone: str, reminder_text: str, reminder_at: str, sheet_row: Optional[int] = None, recipient_telegram_id: Optional[str] = None):
     """Добавить напоминание."""
     conn = get_connection()
@@ -715,25 +702,6 @@ def record_task_reminder_sent(task_id: int):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn.execute("UPDATE task_messages SET last_reminder_at = ? WHERE id = ?", (now, task_id))
         conn.commit()
-    finally:
-        conn.close()
-
-
-def get_client_full_history(phone: str) -> list[dict]:
-    """Полная история клиента: события + задачи + комментарии, единая лента."""
-    conn = get_connection()
-    try:
-        rows = conn.execute(
-            """SELECT 'event' as src, event_type as type, description, created_at
-               FROM events WHERE phone = ?
-               UNION ALL
-               SELECT 'task', 'task_assigned', task_text, created_at
-               FROM task_messages WHERE phone = ?
-               ORDER BY created_at DESC
-               LIMIT 100""",
-            (phone, phone)
-        ).fetchall()
-        return [{"src": r[0], "type": r[1], "description": r[2], "created_at": r[3]} for r in rows]
     finally:
         conn.close()
 
