@@ -6,6 +6,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from config import GOOGLE_CREDENTIALS_PATH, GOOGLE_SHEET_URL
+from database import normalize_crm_phone
 from legal_sync import legal_row_from_sheet_rev, normalize_legal_header
 from models import CallRow, RowStatus
 
@@ -184,7 +185,8 @@ def fetch_call_data(sheet_url: Optional[str] = None) -> tuple[list[CallRow], int
         if not any(str(c).strip() for c in row[:5]):
             continue
 
-        phone = str(row[2]).strip() if len(row) > 2 else ""
+        raw_phone = str(row[2]).strip() if len(row) > 2 else ""
+        phone = normalize_crm_phone(raw_phone)
         digits = re.sub(r"\D", "", phone)
         if not digits or len(digits) < 10:
             continue

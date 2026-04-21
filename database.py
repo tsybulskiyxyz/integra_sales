@@ -20,6 +20,21 @@ def _phone_suffix10(phone: Optional[str]) -> str:
     return d[-10:] if len(d) >= 10 else ""
 
 
+def normalize_crm_phone(phone: Optional[str]) -> str:
+    """Единый вид номера для ключей row_extras и строки листа (Sheets часто отдаёт «7925….0»)."""
+    s = str(phone or "").strip()
+    if not s:
+        return ""
+    if re.fullmatch(r"\d+\.0", s):
+        s = s[:-2]
+    d = re.sub(r"\D", "", s)
+    if len(d) == 10:
+        return "7" + d
+    if len(d) == 11 and d.startswith("7"):
+        return d
+    return d if d else s
+
+
 _EXTRA_STATUS_RANK = {
     "first_contact": 0,
     "negotiation": 1,
@@ -48,6 +63,11 @@ def _merge_row_extras_dicts(candidates: list[dict]) -> dict:
     statuses = [s for s in statuses if s]
     if not statuses:
         out["local_status"] = "first_contact"
+    # «Отказ» / «не интересно» не должны проигрывать «первому контакту» из дубликата ключа (max давал бы first_contact).
+    elif "rejected" in statuses:
+        out["local_status"] = "rejected"
+    elif "low_interest" in statuses:
+        out["local_status"] = "low_interest"
     else:
         out["local_status"] = max(statuses, key=lambda s: _EXTRA_STATUS_RANK.get(s, -99))
     return out
@@ -55,7 +75,7 @@ def _merge_row_extras_dicts(candidates: list[dict]) -> dict:
 
 def resolve_row_extra(extras: dict[tuple[str, int], dict], phone: str, sheet_row: int) -> dict:
     """Найти extra для строки Google: сначала точный (phone, row), иначе та же строка и те же 10 цифр."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     try:
         ri = int(sheet_row)
     except (TypeError, ValueError):
@@ -300,6 +320,7 @@ def consume_auth_token(token: str) -> Optional[dict]:
 
 def add_comment(phone: str, comment: str, sheet_row: Optional[int] = None):
     """Добавить комментарий к контакту."""
+    phone = normalize_crm_phone(phone)
     conn = get_connection()
     try:
         conn.execute(
@@ -313,7 +334,7 @@ def add_comment(phone: str, comment: str, sheet_row: Optional[int] = None):
 
 def add_reminder(phone: str, reminder_text: str, reminder_at: str, sheet_row: Optional[int] = None, recipient_telegram_id: Optional[str] = None):
     """Добавить напоминание."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     conn = get_connection()
     try:
         conn.execute(
@@ -471,7 +492,7 @@ def get_status_overrides() -> dict[tuple[str, int], str]:
 
 def set_econom_number(phone: str, sheet_row: int, econom_number: Optional[str]):
     """Сохранить номер эконом для строки."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     sheet_row = int(sheet_row)
     conn = get_connection()
     try:
@@ -487,7 +508,7 @@ def set_econom_number(phone: str, sheet_row: int, econom_number: Optional[str]):
 
 def set_local_status(phone: str, sheet_row: int, local_status: str):
     """Сохранить локальный статус для строки."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     sheet_row = int(sheet_row)
     local_status = (local_status or "").strip() or "first_contact"
     conn = get_connection()
@@ -503,27 +524,34 @@ def set_local_status(phone: str, sheet_row: int, local_status: str):
 
 
 def get_row_extras() -> dict[tuple[str, int], dict]:
-    """Получить доп. данные: (phone, row) -> {econom_number, local_status, object_*}."""
+    """Получить доп. данные: (phone, row) -> {econom_number, local_status, object_*}. Ключи с нормализацией телефона."""
     conn = get_connection()
     try:
         rows = conn.execute(
             "SELECT phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type FROM row_extras"
         ).fetchall()
-        return {(str(r[0]).strip(), int(r[1])): {
-            "econom_number": (r[2] or "").strip(),
-            "local_status": (r[3] or "").strip() or "first_contact",
-            "object_address": (r[4] or "").strip(),
-            "object_area": (r[5] or "").strip(),
-            "object_budget": (r[6] or "").strip(),
-            "object_work_type": (r[7] or "").strip(),
-        } for r in rows}
+        buckets: dict[tuple[str, int], list[dict]] = {}
+        for r in rows:
+            ph = normalize_crm_phone(str(r[0]))
+            sr = int(r[1])
+            k = (ph, sr)
+            d = {
+                "econom_number": (r[2] or "").strip(),
+                "local_status": (r[3] or "").strip() or "first_contact",
+                "object_address": (r[4] or "").strip(),
+                "object_area": (r[5] or "").strip(),
+                "object_budget": (r[6] or "").strip(),
+                "object_work_type": (r[7] or "").strip(),
+            }
+            buckets.setdefault(k, []).append(d)
+        return {k: _merge_row_extras_dicts(lst) for k, lst in buckets.items()}
     finally:
         conn.close()
 
 
 def set_object_info(phone: str, sheet_row: int, address: str, area: str, budget: str, work_type: str):
     """Сохранить информацию об объекте."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     sheet_row = int(sheet_row)
     conn = get_connection()
     try:
@@ -541,7 +569,7 @@ def set_object_info(phone: str, sheet_row: int, address: str, area: str, budget:
 
 def add_event(phone: str, event_type: str, description: str, sheet_row: Optional[int] = None):
     """Записать событие в лог клиента."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     conn = get_connection()
     try:
         conn.execute(
@@ -555,7 +583,7 @@ def add_event(phone: str, event_type: str, description: str, sheet_row: Optional
 
 def get_events(phone: str, limit: int = 50) -> list[dict]:
     """Получить историю событий по клиенту (новые сверху). Совпадение по точному телефону или по последним 10 цифрам."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     conn = get_connection()
     try:
         suf = _phone_suffix10(phone)
@@ -574,7 +602,7 @@ def get_events(phone: str, limit: int = 50) -> list[dict]:
         ).fetchall()
         out = []
         for r in rows:
-            ep = (r[4] or "").strip()
+            ep = normalize_crm_phone(r[4] or "")
             if ep == phone or _phone_suffix10(ep) == suf:
                 out.append({"id": r[0], "type": r[1], "description": r[2], "created_at": r[3]})
                 if len(out) >= limit:
@@ -616,7 +644,7 @@ def get_max_stages() -> dict[tuple[str, int], int]:
         for phone, sheet_row, desc in rows:
             if sheet_row is None:
                 continue
-            key = (phone, sheet_row)
+            key = (normalize_crm_phone(str(phone)), int(sheet_row))
             for label, stage_key in status_map.items():
                 if label in desc:
                     rank = STAGE_RANK.get(stage_key, 0)
@@ -626,7 +654,7 @@ def get_max_stages() -> dict[tuple[str, int], int]:
             "SELECT phone, sheet_row, local_status FROM row_extras WHERE local_status IS NOT NULL AND local_status != ''"
         ).fetchall()
         for phone, sheet_row, local_status in extras_rows:
-            key = (phone, sheet_row)
+            key = (normalize_crm_phone(str(phone)), int(sheet_row))
             rank = STAGE_RANK.get(local_status, 0)
             if local_status not in ("rejected", "low_interest", "contractors"):
                 result[key] = max(result.get(key, 0), rank)
@@ -835,14 +863,22 @@ def get_last_activity_by_row() -> dict[tuple[str, int], str]:
                FROM events WHERE sheet_row IS NOT NULL
                GROUP BY phone, sheet_row"""
         ).fetchall()
-        return {(str(r[0]).strip(), int(r[1])): r[2] for r in rows if r[2]}
+        merged: dict[tuple[str, int], str] = {}
+        for r in rows:
+            if not r[2]:
+                continue
+            k = (normalize_crm_phone(str(r[0])), int(r[1]))
+            prev = merged.get(k)
+            if prev is None or r[2] > prev:
+                merged[k] = r[2]
+        return merged
     finally:
         conn.close()
 
 
 def resolve_last_activity(activity_map: dict[tuple[str, int], str], phone: str, sheet_row: int) -> Optional[str]:
     """Дата последней активности для строки: точный ключ или те же sheet_row и последние 10 цифр телефона."""
-    phone = (phone or "").strip()
+    phone = normalize_crm_phone(phone)
     try:
         ri = int(sheet_row)
     except (TypeError, ValueError):

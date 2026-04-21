@@ -35,6 +35,7 @@ from database import (
     resolve_row_extra,
     get_last_activity_by_row,
     resolve_last_activity,
+    normalize_crm_phone,
     add_event,
     get_events,
     delete_event,
@@ -163,7 +164,7 @@ def _build_weekly_report() -> Optional[str]:
         reached_week = [r for r in week_rows if r.status in (RowStatus.RED, RowStatus.GREEN, RowStatus.PURPLE)]
         kp_count = 0
         for r in reached_week:
-            key = (r.phone, r.row_index)
+            key = (normalize_crm_phone(r.phone), int(r.row_index))
             local_status = resolve_row_extra(extras, r.phone, r.row_index).get("local_status", "first_contact")
             stage_rank = max_stages.get(key, 0)
             if local_status in ("proposal_sent", "closed") or stage_rank >= 3:
@@ -435,7 +436,7 @@ async def get_data():
         if not extra:
             extra = {}
         local_status = extra.get("local_status", "first_contact")
-        max_rank = max_stages.get((r.phone, r.row_index), 0)
+        max_rank = max_stages.get((normalize_crm_phone(r.phone), int(r.row_index)), 0)
         current_rank = {"first_contact": 0, "negotiation": 1, "waiting": 2, "proposal_sent": 3, "closed": 4}.get(local_status, -1)
         best_rank = max(max_rank, current_rank) if current_rank >= 0 else max_rank
         max_stage = "contractors" if local_status == "contractors" else stage_names.get(best_rank, "first_contact")
