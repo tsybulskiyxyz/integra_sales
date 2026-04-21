@@ -74,13 +74,34 @@ def resolve_row_extra(extras: dict[tuple[str, int], dict], phone: str, sheet_row
     if suf:
         for (p, row_i), v in extras.items():
             try:
-                if int(row_i) != ri:
-                    continue
+                rnum = int(row_i)
             except (TypeError, ValueError):
                 continue
+            if rnum != ri:
+                continue
             if _phone_suffix10(p) == suf:
-                take((p, int(row_i)))
-    return _merge_row_extras_dicts(collected)
+                take((p, rnum))
+    merged = _merge_row_extras_dicts(collected)
+    if merged:
+        return merged
+
+    # Строка в таблице сдвинулась (вставка/удаление строк) — номер sheet_row в листе ≠ ключу в БД.
+    if not suf:
+        return {}
+    matches = [(k, v) for k, v in extras.items() if _phone_suffix10(k[0]) == suf]
+    if not matches:
+        return {}
+    if len(matches) == 1:
+        return dict(matches[0][1])
+
+    def _rownum(k: tuple[str, int]) -> int:
+        try:
+            return int(k[1])
+        except (TypeError, ValueError):
+            return 10**9
+
+    _, best_v = min(matches, key=lambda kv: abs(_rownum(kv[0]) - ri))
+    return dict(best_v)
 
 
 def init_db():

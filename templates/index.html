@@ -2252,11 +2252,23 @@
             const phone = el.dataset.phone;
             const row = Number(el.dataset.row);
             const status = el.value;
-            await fetch('/api/local-status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, sheet_row: row, local_status: status })
-            });
+            try {
+                const r = await fetch('/api/local-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, sheet_row: row, local_status: status })
+                });
+                let d = {};
+                try { d = await r.json(); } catch (_) {}
+                if (!r.ok) {
+                    alert(typeof d.detail === 'string' ? d.detail : ('Не удалось сохранить статус (' + r.status + ')'));
+                    await loadData();
+                    return;
+                }
+            } catch (e) {
+                alert(e.message || 'Ошибка сети');
+                return;
+            }
             const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
             if (item) item.local_status = status;
             renderFunnel();
@@ -2267,11 +2279,21 @@
             const phone = el.dataset.phone;
             const row = Number(el.dataset.row);
             const val = el.value.trim();
-            await fetch('/api/econom-number', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, sheet_row: row, econom_number: val })
-            });
+            try {
+                const r = await fetch('/api/econom-number', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, sheet_row: row, econom_number: val })
+                });
+                let d = {};
+                try { d = await r.json(); } catch (_) {}
+                if (!r.ok) {
+                    alert(typeof d.detail === 'string' ? d.detail : ('Не удалось сохранить имя (' + r.status + ')'));
+                    await loadData();
+                }
+            } catch (e) {
+                alert(e.message || 'Ошибка сети');
+            }
         }
 
         async function saveModalObjectInfo(phone, sheetRow) {
