@@ -2012,10 +2012,10 @@
                             return `
                             <tr class="row-green">
                                 <td>${r.phone}</td>
-                                <td><input type="text" class="econom-input" placeholder="" value="${(r.econom_number || '').replace(/"/g, '&quot;')}" data-phone="${r.phone}" data-row="${r.row_index}" onchange="saveEconom(this)"></td>
+                                <td><input type="text" class="econom-input" placeholder="" value="${(r.econom_number || '').replace(/"/g, '&quot;')}" data-phone="${r.phone}" data-row="${r.row_index}" data-extra-id="${r.extra_id != null ? r.extra_id : ''}" onchange="saveEconom(this)"></td>
                                 <td class="date-cell">${formatDateShort(r.creation_time) || '—'}</td>
                                 <td>
-                                    <select class="status-select" data-phone="${r.phone}" data-row="${r.row_index}" onchange="saveLocalStatus(this)">
+                                    <select class="status-select" data-phone="${r.phone}" data-row="${r.row_index}" data-extra-id="${r.extra_id != null ? r.extra_id : ''}" onchange="saveLocalStatus(this)">
                                         <option value="first_contact" ${r.local_status==='first_contact'?'selected':''}>Установлен первый контакт</option>
                                         <option value="negotiation" ${r.local_status==='negotiation'?'selected':''}>Переговоры</option>
                                         <option value="waiting" ${r.local_status==='waiting'?'selected':''}>Ушли в долгое ожидание</option>
@@ -2260,17 +2260,27 @@
             } catch (e) { alert(e.message); }
         }
 
+        function _readExtraIdFromDataset(el) {
+            const raw = el && el.dataset ? el.dataset.extraId : '';
+            if (raw === undefined || raw === '') return null;
+            const n = parseInt(raw, 10);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        }
+
         async function saveLocalStatus(el) {
             const phone = el.dataset.phone;
             const row = Number(el.dataset.row);
             const status = el.value;
+            const extraId = _readExtraIdFromDataset(el);
+            const payload = { phone, sheet_row: row, local_status: status };
+            if (extraId != null) payload.extra_id = extraId;
+            let d = {};
             try {
                 const r = await fetch('/api/local-status', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone, sheet_row: row, local_status: status })
+                    body: JSON.stringify(payload)
                 });
-                let d = {};
                 try { d = await r.json(); } catch (_) {}
                 if (!r.ok) {
                     alert(typeof d.detail === 'string' ? d.detail : ('Не удалось сохранить статус (' + r.status + ')'));
@@ -2284,6 +2294,7 @@
             const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
             if (item) {
                 item.local_status = status;
+                if (d.extra_id != null) item.extra_id = d.extra_id;
                 bumpRowsDataActivity(phone, row);
             }
             renderFunnel();
@@ -2294,13 +2305,16 @@
             const phone = el.dataset.phone;
             const row = Number(el.dataset.row);
             const val = el.value.trim();
+            const extraId = _readExtraIdFromDataset(el);
+            const payload = { phone, sheet_row: row, econom_number: val };
+            if (extraId != null) payload.extra_id = extraId;
+            let d = {};
             try {
                 const r = await fetch('/api/econom-number', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone, sheet_row: row, econom_number: val })
+                    body: JSON.stringify(payload)
                 });
-                let d = {};
                 try { d = await r.json(); } catch (_) {}
                 if (!r.ok) {
                     alert(typeof d.detail === 'string' ? d.detail : ('Не удалось сохранить имя (' + r.status + ')'));
@@ -2314,6 +2328,7 @@
             const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
             if (item) {
                 item.econom_number = val;
+                if (d.extra_id != null) item.extra_id = d.extra_id;
                 bumpRowsDataActivity(phone, row);
             }
             renderCalls();
@@ -2321,6 +2336,7 @@
 
         async function saveModalObjectInfo(phone, sheetRow) {
             if (!sheetRow) return;
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === Number(sheetRow));
             const data = {
                 phone, sheet_row: sheetRow,
                 address: document.getElementById('modalObjAddress').value.trim(),
@@ -2328,17 +2344,20 @@
                 budget: document.getElementById('modalObjBudget').value.trim(),
                 work_type: document.getElementById('modalObjWorkType').value.trim(),
             };
-            await fetch('/api/object-info', {
+            if (item && item.extra_id != null) data.extra_id = item.extra_id;
+            const resp = await fetch('/api/object-info', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === Number(sheetRow));
+            let d = {};
+            try { d = await resp.json(); } catch (_) {}
             if (item) {
                 item.object_address = data.address;
                 item.object_area = data.area;
                 item.object_budget = data.budget;
                 item.object_work_type = data.work_type;
+                if (d.extra_id != null) item.extra_id = d.extra_id;
             }
         }
 

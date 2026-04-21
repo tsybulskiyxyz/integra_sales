@@ -29,8 +29,13 @@ from database import (
     get_all_contacts,
     delete_contact,
     set_econom_number,
+    set_econom_number_by_id,
     set_local_status,
+    set_local_status_by_id,
     set_object_info,
+    set_object_info_by_id,
+    get_row_extra_by_id,
+    get_row_extra_id_by_phone_row,
     get_row_extras,
     resolve_row_extra,
     get_last_activity_by_row,
@@ -268,24 +273,27 @@ class TaskInput(BaseModel):
 
 
 class EconomNumberInput(BaseModel):
-    phone: str
-    sheet_row: int
+    phone: str = ""
+    sheet_row: int = 0
     econom_number: Optional[str] = ""
+    extra_id: Optional[int] = None
 
 
 class LocalStatusInput(BaseModel):
-    phone: str
-    sheet_row: int
+    phone: str = ""
+    sheet_row: int = 0
     local_status: str
+    extra_id: Optional[int] = None
 
 
 class ObjectInfoInput(BaseModel):
-    phone: str
-    sheet_row: int
+    phone: str = ""
+    sheet_row: int = 0
     address: str = ""
     area: str = ""
     budget: str = ""
     work_type: str = ""
+    extra_id: Optional[int] = None
 
 
 class LegalLeadCreateInput(BaseModel):
@@ -446,6 +454,7 @@ async def get_data():
             "status": r.status.value,
             "creation_time": r.creation_time,
             "last_activity": resolve_last_activity(last_activity_map, r.phone, r.row_index),
+            "extra_id": extra.get("id"),
             "econom_number": extra.get("econom_number", ""),
             "local_status": local_status,
             "max_stage": max_stage,
@@ -1020,25 +1029,60 @@ STATUS_LABELS = {
 
 @app.post("/api/local-status")
 async def api_set_local_status(data: LocalStatusInput):
-    set_local_status(data.phone, data.sheet_row, data.local_status)
+    if data.extra_id is not None:
+        if not set_local_status_by_id(data.extra_id, data.local_status):
+            raise HTTPException(404, "Строка CRM не найдена")
+        row = get_row_extra_by_id(data.extra_id)
+        if not row:
+            raise HTTPException(404, "Строка CRM не найдена")
+        phone, sr = row["phone"], row["sheet_row"]
+        eid = data.extra_id
+    else:
+        set_local_status(data.phone, data.sheet_row, data.local_status)
+        phone, sr = normalize_crm_phone(data.phone), int(data.sheet_row)
+        eid = get_row_extra_id_by_phone_row(phone, sr)
     label = STATUS_LABELS.get(data.local_status, data.local_status)
-    add_event(data.phone, "status_change", f"Статус изменён → {label}", data.sheet_row)
-    return {"ok": True}
+    add_event(phone, "status_change", f"Статус изменён → {label}", sr)
+    return {"ok": True, "extra_id": eid}
 
 
 @app.post("/api/econom-number")
 async def api_set_econom(data: EconomNumberInput):
-    set_econom_number(data.phone, data.sheet_row, data.econom_number or "")
-    add_event(data.phone, "name_change", f"Имя изменено → {data.econom_number or '(пусто)'}", data.sheet_row)
-    return {"ok": True}
+    if data.extra_id is not None:
+        if not set_econom_number_by_id(data.extra_id, data.econom_number or ""):
+            raise HTTPException(404, "Строка CRM не найдена")
+        row = get_row_extra_by_id(data.extra_id)
+        if not row:
+            raise HTTPException(404, "Строка CRM не найдена")
+        phone, sr = row["phone"], row["sheet_row"]
+        eid = data.extra_id
+    else:
+        set_econom_number(data.phone, data.sheet_row, data.econom_number or "")
+        phone, sr = normalize_crm_phone(data.phone), int(data.sheet_row)
+        eid = get_row_extra_id_by_phone_row(phone, sr)
+    add_event(phone, "name_change", f"Имя изменено → {data.econom_number or '(пусто)'}", sr)
+    return {"ok": True, "extra_id": eid}
 
 
 @app.post("/api/object-info")
 async def api_set_object_info(data: ObjectInfoInput):
-    set_object_info(data.phone, data.sheet_row, data.address, data.area, data.budget, data.work_type)
+    if data.extra_id is not None:
+        if not set_object_info_by_id(
+            data.extra_id, data.address, data.area, data.budget, data.work_type
+        ):
+            raise HTTPException(404, "Строка CRM не найдена")
+        row = get_row_extra_by_id(data.extra_id)
+        if not row:
+            raise HTTPException(404, "Строка CRM не найдена")
+        phone, sr = row["phone"], row["sheet_row"]
+        eid = data.extra_id
+    else:
+        set_object_info(data.phone, data.sheet_row, data.address, data.area, data.budget, data.work_type)
+        phone, sr = normalize_crm_phone(data.phone), int(data.sheet_row)
+        eid = get_row_extra_id_by_phone_row(phone, sr)
     parts = [p for p in [data.address, data.area, data.budget, data.work_type] if p]
-    add_event(data.phone, "object_update", f"Объект обновлён: {', '.join(parts) or '(пусто)'}", data.sheet_row)
-    return {"ok": True}
+    add_event(phone, "object_update", f"Объект обновлён: {', '.join(parts) or '(пусто)'}", sr)
+    return {"ok": True, "extra_id": eid}
 
 
 @app.post("/api/comment")

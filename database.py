@@ -28,11 +28,16 @@ def normalize_crm_phone(phone: Optional[str]) -> str:
     if re.fullmatch(r"\d+\.0", s):
         s = s[:-2]
     d = re.sub(r"\D", "", s)
+    if not d:
+        return s
+    # 8 9XX XXX XX XX (РФ) → тот же абонент, что +7 9XX… — иначе две записи в row_extras
+    if len(d) == 11 and d.startswith("8"):
+        d = "7" + d[1:]
     if len(d) == 10:
         return "7" + d
     if len(d) == 11 and d.startswith("7"):
         return d
-    return d if d else s
+    return d
 
 
 _EXTRA_STATUS_RANK = {
@@ -160,6 +165,7 @@ def init_db():
                 PRIMARY KEY (phone, sheet_row)
             );
             CREATE TABLE IF NOT EXISTS row_extras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 phone TEXT NOT NULL,
                 sheet_row INTEGER NOT NULL,
                 econom_number TEXT,
@@ -168,7 +174,7 @@ def init_db():
                 object_area TEXT DEFAULT '',
                 object_budget TEXT DEFAULT '',
                 object_work_type TEXT DEFAULT '',
-                PRIMARY KEY (phone, sheet_row)
+                UNIQUE(phone, sheet_row)
             );
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -257,10 +263,87 @@ def init_db():
             conn.commit()
         except Exception:
             pass
+        _migrate_row_extras_add_id(conn)
+        _dedupe_row_extras_normalized(conn)
         _migrate_legal_lead_statuses(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_row_extras_add_id(conn: sqlite3.Connection) -> None:
+    """Старые БД: row_extras без id — пересоздать таблицу как у юрлидов (стабильный ключ для PATCH)."""
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='row_extras'")
+    if not cur.fetchone():
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(row_extras)").fetchall()]
+    if "id" in cols:
+        return
+    conn.executescript("""
+        CREATE TABLE row_extras__new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL,
+            sheet_row INTEGER NOT NULL,
+            econom_number TEXT,
+            local_status TEXT DEFAULT 'first_contact',
+            object_address TEXT DEFAULT '',
+            object_area TEXT DEFAULT '',
+            object_budget TEXT DEFAULT '',
+            object_work_type TEXT DEFAULT '',
+            UNIQUE(phone, sheet_row)
+        );
+        INSERT INTO row_extras__new (phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type)
+        SELECT phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type FROM row_extras;
+        DROP TABLE row_extras;
+        ALTER TABLE row_extras__new RENAME TO row_extras;
+    """)
+
+
+def _dedupe_row_extras_normalized(conn: sqlite3.Connection) -> None:
+    """Слить дубликаты с одним normalize_crm_phone(phone) и sheet_row (после 8↔7, .0 и т.д.)."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(row_extras)").fetchall()]
+    if "id" not in cols:
+        return
+    rows = conn.execute(
+        """SELECT id, phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type
+           FROM row_extras"""
+    ).fetchall()
+    buckets: dict[tuple[str, int], list] = {}
+    for r in rows:
+        k = (normalize_crm_phone(str(r[1])), int(r[2]))
+        buckets.setdefault(k, []).append(r)
+    for lst in buckets.values():
+        if len(lst) <= 1:
+            continue
+        keep_id = min(int(r[0]) for r in lst)
+        merge_inputs = []
+        for r in lst:
+            merge_inputs.append({
+                "econom_number": (r[3] or "").strip(),
+                "local_status": (r[4] or "").strip() or "first_contact",
+                "object_address": (r[5] or "").strip(),
+                "object_area": (r[6] or "").strip(),
+                "object_budget": (r[7] or "").strip(),
+                "object_work_type": (r[8] or "").strip(),
+            })
+        merged = _merge_row_extras_dicts(merge_inputs)
+        conn.execute(
+            """UPDATE row_extras SET econom_number=?, local_status=?, object_address=?, object_area=?, object_budget=?, object_work_type=?
+               WHERE id=?""",
+            (
+                merged.get("econom_number", "") or "",
+                merged.get("local_status", "") or "first_contact",
+                merged.get("object_address", "") or "",
+                merged.get("object_area", "") or "",
+                merged.get("object_budget", "") or "",
+                merged.get("object_work_type", "") or "",
+                keep_id,
+            ),
+        )
+        for r in lst:
+            rid = int(r[0])
+            if rid != keep_id:
+                conn.execute("DELETE FROM row_extras WHERE id=?", (rid,))
 
 
 def _migrate_legal_lead_statuses(conn):
@@ -506,6 +589,19 @@ def set_econom_number(phone: str, sheet_row: int, econom_number: Optional[str]):
         conn.close()
 
 
+def set_econom_number_by_id(row_id: int, econom_number: Optional[str]) -> bool:
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            "UPDATE row_extras SET econom_number = ? WHERE id = ?",
+            (econom_number or "", int(row_id)),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def set_local_status(phone: str, sheet_row: int, local_status: str):
     """Сохранить локальный статус для строки."""
     phone = normalize_crm_phone(phone)
@@ -523,28 +619,90 @@ def set_local_status(phone: str, sheet_row: int, local_status: str):
         conn.close()
 
 
+def set_local_status_by_id(row_id: int, local_status: str) -> bool:
+    """Обновить статус по id строки CRM (как PATCH юрлида по lead_id)."""
+    local_status = (local_status or "").strip() or "first_contact"
+    conn = get_connection()
+    try:
+        cur = conn.execute("UPDATE row_extras SET local_status = ? WHERE id = ?", (local_status, int(row_id)))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def get_row_extra_id_by_phone_row(phone: str, sheet_row: int) -> Optional[int]:
+    """Id строки CRM после UPSERT по телефону и строке листа."""
+    phone = normalize_crm_phone(phone)
+    sheet_row = int(sheet_row)
+    conn = get_connection()
+    try:
+        r = conn.execute(
+            "SELECT id FROM row_extras WHERE phone = ? AND sheet_row = ?",
+            (phone, sheet_row),
+        ).fetchone()
+        return int(r[0]) if r else None
+    finally:
+        conn.close()
+
+
+def get_row_extra_by_id(row_id: int) -> Optional[dict]:
+    """Одна запись row_extras по id (телефон нормализован)."""
+    conn = get_connection()
+    try:
+        r = conn.execute(
+            """SELECT id, phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type
+               FROM row_extras WHERE id = ?""",
+            (int(row_id),),
+        ).fetchone()
+        if not r:
+            return None
+        return {
+            "id": r[0],
+            "phone": normalize_crm_phone(str(r[1])),
+            "sheet_row": int(r[2]),
+            "econom_number": (r[3] or "").strip(),
+            "local_status": (r[4] or "").strip() or "first_contact",
+            "object_address": (r[5] or "").strip(),
+            "object_area": (r[6] or "").strip(),
+            "object_budget": (r[7] or "").strip(),
+            "object_work_type": (r[8] or "").strip(),
+        }
+    finally:
+        conn.close()
+
+
 def get_row_extras() -> dict[tuple[str, int], dict]:
-    """Получить доп. данные: (phone, row) -> {econom_number, local_status, object_*}. Ключи с нормализацией телефона."""
+    """Получить доп. данные: (phone, row) -> {id, econom_number, local_status, object_*}. Ключи с нормализацией телефона."""
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type FROM row_extras"
+            """SELECT id, phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type
+               FROM row_extras"""
         ).fetchall()
         buckets: dict[tuple[str, int], list[dict]] = {}
         for r in rows:
-            ph = normalize_crm_phone(str(r[0]))
-            sr = int(r[1])
+            rid = int(r[0])
+            ph = normalize_crm_phone(str(r[1]))
+            sr = int(r[2])
             k = (ph, sr)
             d = {
-                "econom_number": (r[2] or "").strip(),
-                "local_status": (r[3] or "").strip() or "first_contact",
-                "object_address": (r[4] or "").strip(),
-                "object_area": (r[5] or "").strip(),
-                "object_budget": (r[6] or "").strip(),
-                "object_work_type": (r[7] or "").strip(),
+                "id": rid,
+                "econom_number": (r[3] or "").strip(),
+                "local_status": (r[4] or "").strip() or "first_contact",
+                "object_address": (r[5] or "").strip(),
+                "object_area": (r[6] or "").strip(),
+                "object_budget": (r[7] or "").strip(),
+                "object_work_type": (r[8] or "").strip(),
             }
             buckets.setdefault(k, []).append(d)
-        return {k: _merge_row_extras_dicts(lst) for k, lst in buckets.items()}
+        out: dict[tuple[str, int], dict] = {}
+        for k, lst in buckets.items():
+            merge_part = [{kk: vv for kk, vv in x.items() if kk != "id"} for x in lst]
+            merged = _merge_row_extras_dicts(merge_part)
+            merged["id"] = min(int(x["id"]) for x in lst)
+            out[k] = merged
+        return out
     finally:
         conn.close()
 
@@ -563,6 +721,20 @@ def set_object_info(phone: str, sheet_row: int, address: str, area: str, budget:
             (phone, sheet_row, address, area, budget, work_type, address, area, budget, work_type)
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def set_object_info_by_id(row_id: int, address: str, area: str, budget: str, work_type: str) -> bool:
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """UPDATE row_extras SET object_address=?, object_area=?, object_budget=?, object_work_type=?
+               WHERE id=?""",
+            (address, area, budget, work_type, int(row_id)),
+        )
+        conn.commit()
+        return cur.rowcount > 0
     finally:
         conn.close()
 
