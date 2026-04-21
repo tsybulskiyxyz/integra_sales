@@ -622,6 +622,74 @@
         {% endif %}
     </div>
 
+    <div id="timelineModal" class="modal timeline-modal">
+        <div class="modal-content">
+            <div class="timeline-header">
+                <h3>📋 История клиента <span id="tlPhone" style="color:var(--accent)"></span><span class="tl-live" title="Обновляется"></span></h3>
+            </div>
+            <div class="timeline-list" id="timelineList">
+                <p style="color:var(--muted)">Загрузка...</p>
+            </div>
+            <button type="button" onclick="closeTimeline()" class="btn-muted modal-close">Закрыть</button>
+        </div>
+    </div>
+
+    {% if not is_manager %}
+    <div id="workerTaskNoteModal" class="modal">
+        <div class="modal-content" style="max-width:440px">
+            <input type="hidden" id="wtnPhone">
+            <input type="hidden" id="wtnSheetRow">
+            <div style="background:var(--bg);border-radius:4px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.85rem;">
+                <span style="color:var(--muted)">Клиент:</span> <span id="wtnClientInfo" style="color:var(--accent)"></span>
+            </div>
+            <div style="display:flex;gap:0;margin-bottom:1rem">
+                <button type="button" id="wtnModeNote" onclick="switchWorkerTaskNoteMode('note')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.85rem">Заметка</button>
+                <button type="button" id="wtnModeNotify" onclick="switchWorkerTaskNoteMode('notify')" style="flex:1;padding:0.5rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.85rem">Уведомление</button>
+            </div>
+            <label id="wtnNoteLabel" style="color:var(--muted);font-size:0.8rem;display:block;margin-bottom:0.35rem">Добавить заметку</label>
+            <div class="form-row">
+                <textarea id="wtnText" rows="4" placeholder="Текст..." style="width:100%"></textarea>
+            </div>
+            <div id="wtnNotifyFields" style="display:none">
+                <div class="form-row" style="flex-direction:column;align-items:stretch">
+                    <label style="color:var(--muted);font-size:0.8rem">Кому:</label>
+                    <select id="wtnRecipient" style="width:100%">
+                        <option value="">Мне (по умолчанию)</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0;margin-bottom:0.75rem">
+                    <button type="button" id="wtnWhenNow" onclick="switchWorkerTaskNoteWhen('now')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-right:none;border-radius:4px 0 0 4px;background:#fff;color:#000;cursor:pointer;font-family:inherit;font-size:0.8rem">Сейчас</button>
+                    <button type="button" id="wtnWhenLater" onclick="switchWorkerTaskNoteWhen('later')" style="flex:1;padding:0.4rem;border:1px solid var(--border);border-radius:0 4px 4px 0;background:var(--bg);color:var(--muted);cursor:pointer;font-family:inherit;font-size:0.8rem">По времени</button>
+                </div>
+                <div id="wtnLaterFields" style="display:none">
+                    <div class="form-row" style="flex-direction:column;align-items:stretch">
+                        <label style="color:var(--muted);font-size:0.8rem">Дата и время:</label>
+                        <input type="datetime-local" id="wtnReminder" style="width:100%">
+                    </div>
+                    <div class="form-row" style="align-items:center;gap:0.75rem">
+                        <label style="color:var(--muted);font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem">
+                            <input type="checkbox" id="wtnRepeat" onchange="toggleWorkerTaskNoteRepeat()"> Повторять
+                        </label>
+                    </div>
+                    <div id="wtnRepeatFields" style="display:none">
+                        <div class="form-row" style="gap:0.5rem;align-items:center">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">Каждые</label>
+                            <input type="number" id="wtnRepeatDays" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">дн. x</label>
+                            <input type="number" id="wtnRepeatCount" min="1" value="3" style="width:60px;min-width:60px;flex:none">
+                            <label style="color:var(--muted);font-size:0.8rem;white-space:nowrap">раз</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row" style="justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
+                <button type="button" onclick="closeWorkerTaskNoteModal()" class="btn-muted">Закрыть</button>
+                <button type="button" id="wtnSubmitBtn" onclick="submitWorkerTaskNoteModal()" class="btn-green">Сохранить заметку</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if is_manager %}
     <div id="modal" class="modal">
         <div class="modal-content" style="max-width:440px">
@@ -714,18 +782,6 @@
                 <button onclick="closeTaskModal()" class="btn-muted">Отмена</button>
                 <button onclick="sendTask()" class="btn-purple">Отправить в Telegram</button>
             </div>
-        </div>
-    </div>
-
-    <div id="timelineModal" class="modal timeline-modal">
-        <div class="modal-content">
-            <div class="timeline-header">
-                <h3>📋 История клиента <span id="tlPhone" style="color:var(--accent)"></span><span class="tl-live" title="Обновляется"></span></h3>
-            </div>
-            <div class="timeline-list" id="timelineList">
-                <p style="color:var(--muted)">Загрузка...</p>
-            </div>
-            <button onclick="closeTimeline()" class="btn-muted modal-close">Закрыть</button>
         </div>
     </div>
 
@@ -2378,10 +2434,159 @@
             note: 'Заметка', system: 'Система'
         };
 
+        let _wtnMode = 'note';
+        let _wtnWhen = 'now';
+
+        function closeWorkerTaskNoteModal() {
+            const m = document.getElementById('workerTaskNoteModal');
+            if (m) m.classList.remove('show');
+        }
+
+        async function openWorkerTaskNote(phone, sheetRow, clientName) {
+            const modal = document.getElementById('workerTaskNoteModal');
+            if (!modal) return;
+            document.getElementById('wtnPhone').value = phone;
+            const srEl = document.getElementById('wtnSheetRow');
+            if (srEl) srEl.value = sheetRow != null && sheetRow !== '' ? String(sheetRow) : '';
+            document.getElementById('wtnText').value = '';
+            document.getElementById('wtnReminder').value = '';
+            document.getElementById('wtnRepeat').checked = false;
+            toggleWorkerTaskNoteRepeat();
+            const cn = (clientName || '').trim();
+            document.getElementById('wtnClientInfo').textContent = cn ? `${phone} / ${cn}` : phone;
+            const sel = document.getElementById('wtnRecipient');
+            sel.innerHTML = '<option value="">Мне (по умолчанию)</option>';
+            try {
+                const r = await fetch('/api/contacts');
+                const d = await r.json();
+                (d.contacts || []).forEach(c => {
+                    if (c.telegram_id) {
+                        sel.innerHTML += `<option value="${c.telegram_id}">${c.name} (${roleLabels[c.role] || c.role})</option>`;
+                    }
+                });
+            } catch (e) {}
+            switchWorkerTaskNoteMode('note');
+            switchWorkerTaskNoteWhen('now');
+            modal.classList.add('show');
+        }
+
+        function switchWorkerTaskNoteMode(mode) {
+            _wtnMode = mode;
+            const lbl = document.getElementById('wtnNoteLabel');
+            if (lbl) lbl.textContent = mode === 'note' ? 'Добавить заметку' : 'Текст уведомления';
+            document.getElementById('wtnModeNote').style.background = mode === 'note' ? '#fff' : 'var(--bg)';
+            document.getElementById('wtnModeNote').style.color = mode === 'note' ? '#000' : 'var(--muted)';
+            document.getElementById('wtnModeNotify').style.background = mode === 'notify' ? '#fff' : 'var(--bg)';
+            document.getElementById('wtnModeNotify').style.color = mode === 'notify' ? '#000' : 'var(--muted)';
+            document.getElementById('wtnNotifyFields').style.display = mode === 'notify' ? 'block' : 'none';
+            const btn = document.getElementById('wtnSubmitBtn');
+            if (mode === 'note') {
+                btn.textContent = 'Сохранить заметку';
+                btn.className = 'btn-green';
+            } else {
+                btn.textContent = 'Отправить';
+                btn.className = 'btn-purple';
+            }
+        }
+
+        function switchWorkerTaskNoteWhen(when) {
+            _wtnWhen = when;
+            document.getElementById('wtnWhenNow').style.background = when === 'now' ? '#fff' : 'var(--bg)';
+            document.getElementById('wtnWhenNow').style.color = when === 'now' ? '#000' : 'var(--muted)';
+            document.getElementById('wtnWhenLater').style.background = when === 'later' ? '#fff' : 'var(--bg)';
+            document.getElementById('wtnWhenLater').style.color = when === 'later' ? '#000' : 'var(--muted)';
+            document.getElementById('wtnLaterFields').style.display = when === 'later' ? 'block' : 'none';
+        }
+
+        function toggleWorkerTaskNoteRepeat() {
+            document.getElementById('wtnRepeatFields').style.display = document.getElementById('wtnRepeat').checked ? 'block' : 'none';
+        }
+
+        async function submitWorkerTaskNoteModal() {
+            const modal = document.getElementById('workerTaskNoteModal');
+            if (!modal) return;
+            const phone = (document.getElementById('wtnPhone').value || '').trim();
+            const srRaw = (document.getElementById('wtnSheetRow').value || '').trim();
+            const sheetRow = srRaw === '' ? null : +srRaw;
+            const text = (document.getElementById('wtnText').value || '').trim();
+            if (_wtnMode === 'note') {
+                if (!text) { alert('Введите текст заметки'); return; }
+                try {
+                    const r = await fetch('/api/comment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, comment: text, sheet_row: sheetRow }),
+                    });
+                    if (!r.ok) { const d = await r.json(); throw new Error(d.detail || 'Ошибка'); }
+                    alert('Заметка сохранена');
+                    closeWorkerTaskNoteModal();
+                    loadMyTasks();
+                } catch (e) { alert(e.message); }
+                return;
+            }
+            if (!text) { alert('Для уведомления нужен текст'); return; }
+            const recipient = document.getElementById('wtnRecipient').value || null;
+            if (_wtnWhen === 'now') {
+                try {
+                    const r = await fetch('/api/send-now', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone, text, sheet_row: sheetRow, recipient_telegram_id: recipient }),
+                    });
+                    const d = await r.json();
+                    alert(d.ok ? 'Отправлено' : 'Ошибка отправки');
+                    closeWorkerTaskNoteModal();
+                    loadMyTasks();
+                } catch (e) { alert(e.message); }
+                return;
+            }
+            const at = document.getElementById('wtnReminder').value;
+            if (!at) { alert('Укажите дату и время'); return; }
+            const repeat = document.getElementById('wtnRepeat').checked;
+            try {
+                if (repeat) {
+                    const interval = +(document.getElementById('wtnRepeatDays').value || 3);
+                    const count = +(document.getElementById('wtnRepeatCount').value || 3);
+                    const base = new Date(at);
+                    for (let i = 0; i < count; i++) {
+                        const dt = new Date(base.getTime() + i * interval * 86400000);
+                        const ts = dt.toISOString().slice(0, 16).replace('T', ' ');
+                        await fetch('/api/reminder', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                phone,
+                                text: `[${i + 1}/${count}] ${text}`,
+                                reminder_at: ts,
+                                sheet_row: sheetRow,
+                                recipient_telegram_id: recipient,
+                            }),
+                        });
+                    }
+                    alert(`Запланировано ${count} уведомлений с интервалом ${interval} дн.`);
+                } else {
+                    await fetch('/api/reminder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone,
+                            text,
+                            reminder_at: at.replace('T', ' '),
+                            sheet_row: sheetRow,
+                            recipient_telegram_id: recipient,
+                        }),
+                    });
+                    alert('Напоминание запланировано');
+                }
+                closeWorkerTaskNoteModal();
+                loadMyTasks();
+            } catch (e) { alert(e.message); }
+        }
+
         let _tlPhone = '';
-        function openTimeline(phone) {
+        function openTimeline(phone, displayLabel) {
             _tlPhone = phone;
-            document.getElementById('tlPhone').textContent = phone;
+            document.getElementById('tlPhone').textContent = displayLabel || phone;
             document.getElementById('timelineModal').classList.add('show');
             loadTimeline(phone);
             if (_tlInterval) clearInterval(_tlInterval);
@@ -2394,6 +2599,7 @@
         }
 
         async function deleteEvent(eventId) {
+            if (!IS_MANAGER) return;
             if (!confirm('Удалить эту запись из истории?')) return;
             try {
                 const r = await fetch('/api/events/id/' + eventId, { method: 'DELETE' });
@@ -2417,14 +2623,16 @@
                 list.innerHTML = d.events.map(e => {
                     const dt = e.created_at ? new Date(e.created_at.replace(' ', 'T')) : null;
                     const timeStr = dt ? dt.toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+                    const desc = String(e.description || '').replace(/</g, '&lt;');
+                    const delBtn = IS_MANAGER ? `<button type="button" class="tl-del" onclick="deleteEvent(${e.id})" title="Удалить запись">✕</button>` : '';
                     return `<div class="timeline-item" data-event-id="${e.id}">
                         <div class="tl-top">
                             <span class="tl-icon">${EVENT_ICONS[e.type] || '📌'}</span>
                             <span class="tl-type">${EVENT_LABELS[e.type] || e.type}</span>
                             <span class="tl-time">${timeStr}</span>
-                            <button class="tl-del" onclick="deleteEvent(${e.id})" title="Удалить запись">✕</button>
+                            ${delBtn}
                         </div>
-                        <div class="tl-desc">${e.description}</div>
+                        <div class="tl-desc">${desc}</div>
                     </div>`;
                 }).join('');
             } catch (ex) {
@@ -2566,7 +2774,7 @@
                             : '';
                         const statusCell = `<div class="tasks-status-cell">${statusSelect}${forwardBtn}</div>`;
                         return `<tr><td>${t.recipient_name}<br><span style="color:var(--muted);font-size:0.7rem">${roleLabel}</span></td>
-                            <td>${client}<a href="#" onclick="openTimeline('${t.phone}');return false" class="task-client-link" title="Карточка клиента">📋</a></td>
+                            <td>${client}<a href="#" onclick="openTimeline(${JSON.stringify(t.phone)}, ${JSON.stringify(client)});return false" class="task-client-link" title="Карточка клиента">📋</a></td>
                             <td class="task-cell" style="max-width:220px;min-width:180px">${taskCell}</td>
                             <td>${statusCell}</td>
                             <td class="date-cell">${date}</td>
@@ -2635,11 +2843,9 @@
                 const date = t.created_at ? t.created_at.replace('T', ' ').slice(0, 16) : '';
                 const stColor = taskStatusColors[t.status] || 'var(--muted)';
                 const stLabel = taskStatusLabels[t.status] || t.status;
-                const history = (t.history || []).slice(0, 5).map(h =>
-                    `<div style="font-size:0.73rem;color:var(--muted);padding:0.3rem 0;border-top:1px solid var(--border)">
-                        <span style="opacity:0.6">${(h.created_at||'').slice(5,16).replace('T',' ')}</span> ${h.description}
-                    </div>`
-                ).join('');
+                const disp = (t.client_name && String(t.client_name).trim()) ? `${t.phone} / ${t.client_name}` : t.phone;
+                const sheetVal = t.sheet_row != null && t.sheet_row !== '' ? Number(t.sheet_row) : null;
+                const escName = JSON.stringify((t.client_name || '').trim());
                 return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:0.75rem">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
                         <span style="color:var(--accent);font-size:0.85rem">${t.phone}${t.client_name ? ' / ' + t.client_name : ''}</span>
@@ -2647,24 +2853,22 @@
                     </div>
                     <div style="font-size:0.85rem;line-height:1.5;margin-bottom:0.75rem">${t.task_text}</div>
                     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.5rem">
-                        ${t.status !== 'in_progress' ? `<button onclick="setTaskStatus(${t.id},'in_progress')" class="btn-orange" style="padding:0.2rem 0.6rem;font-size:0.75rem">В работе</button>` : ''}
-                        ${t.status !== 'done' ? `<button onclick="setTaskStatus(${t.id},'done')" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Готово</button>` : ''}
-                        <button onclick="toggleTaskComment(${t.id})" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">Комментарий</button>
-                        <button onclick="toggleTaskHistory(${t.id})" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.75rem">История</button>
-                        ${USER_ROLE === 'estimator' ? `<button onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>` : ''}
+                        ${t.status !== 'in_progress' ? `<button type="button" onclick="setTaskStatus(${t.id},'in_progress')" class="btn-orange" style="padding:0.2rem 0.6rem;font-size:0.75rem">В работе</button>` : ''}
+                        ${t.status !== 'done' ? `<button type="button" onclick="setTaskStatus(${t.id},'done')" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Готово</button>` : ''}
+                        <button type="button" onclick="toggleTaskComment(${t.id})" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">Комментарий к задаче</button>
+                        <button type="button" onclick="openTimeline(${JSON.stringify(t.phone)}, ${JSON.stringify(disp)})" class="btn-primary" style="padding:0.2rem 0.6rem;font-size:0.75rem">История</button>
+                        <button type="button" onclick="openWorkerTaskNote(${JSON.stringify(t.phone)}, ${sheetVal === null || Number.isNaN(sheetVal) ? 'null' : sheetVal}, ${escName})" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Заметка</button>
+                        ${USER_ROLE === 'estimator' ? `<button type="button" onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>` : ''}
                         ${(USER_ROLE === 'engineer' || USER_ROLE === 'test') ? `
-                            <button onclick="showDelegateModal(${t.id}, 'estimator', 'сметчице')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться со сметчицей</button>
-                            <button onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>
+                            <button type="button" onclick="showDelegateModal(${t.id}, 'estimator', 'сметчице')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться со сметчицей</button>
+                            <button type="button" onclick="showDelegateModal(${t.id}, 'engineer', 'инженеру')" class="btn-muted" style="padding:0.2rem 0.6rem;font-size:0.75rem">📤 Связаться с инженером</button>
                         ` : ''}
                     </div>
                     <div id="taskComment_${t.id}" style="display:none;margin-top:0.5rem">
                         <div style="display:flex;gap:0.4rem">
-                            <input type="text" id="taskCommentText_${t.id}" placeholder="Написать комментарий..." style="flex:1;font-size:0.8rem">
-                            <button onclick="sendTaskComment(${t.id})" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Отправить</button>
+                            <input type="text" id="taskCommentText_${t.id}" placeholder="Сообщение менеджеру по этой задаче..." style="flex:1;font-size:0.8rem">
+                            <button type="button" onclick="sendTaskComment(${t.id})" class="btn-green" style="padding:0.2rem 0.6rem;font-size:0.75rem">Отправить</button>
                         </div>
-                    </div>
-                    <div id="taskHistory_${t.id}" style="display:none;margin-top:0.5rem;max-height:200px;overflow-y:auto">
-                        ${history || '<p style="color:var(--muted);font-size:0.75rem">Нет истории</p>'}
                     </div>
                     <div style="margin-top:0.25rem;text-align:right"><span style="color:var(--muted);font-size:0.65rem">${date}</span></div>
                 </div>`;
@@ -2686,10 +2890,6 @@
 
         function toggleTaskComment(id) {
             const el = document.getElementById('taskComment_' + id);
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        }
-        function toggleTaskHistory(id) {
-            const el = document.getElementById('taskHistory_' + id);
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 

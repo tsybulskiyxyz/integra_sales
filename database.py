@@ -611,9 +611,11 @@ def get_tasks_for_user(tg_chat_id: str) -> list[dict]:
     try:
         rows = conn.execute(
             """SELECT tm.id, tm.phone, tm.task_text, tm.created_at, tm.role,
-                      re.econom_number, re.local_status, tm.status
+                      (SELECT econom_number FROM row_extras WHERE phone = tm.phone ORDER BY sheet_row LIMIT 1),
+                      (SELECT local_status FROM row_extras WHERE phone = tm.phone ORDER BY sheet_row LIMIT 1),
+                      tm.status,
+                      (SELECT MIN(sheet_row) FROM row_extras WHERE phone = tm.phone)
                FROM task_messages tm
-               LEFT JOIN row_extras re ON re.phone = tm.phone
                WHERE tm.tg_chat_id = ?
                ORDER BY tm.created_at DESC
                LIMIT 50""",
@@ -623,6 +625,7 @@ def get_tasks_for_user(tg_chat_id: str) -> list[dict]:
             "id": r[0], "phone": r[1], "task_text": r[2], "created_at": r[3],
             "role": r[4], "client_name": r[5] or "", "client_status": r[6] or "",
             "status": r[7] or "new",
+            "sheet_row": r[8],
         } for r in rows]
     finally:
         conn.close()

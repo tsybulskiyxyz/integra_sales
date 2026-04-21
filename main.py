@@ -1154,9 +1154,6 @@ async def api_my_tasks(request: Request):
     if not tg_id:
         return {"tasks": []}
     tasks = get_tasks_for_user(tg_id)
-    for t in tasks:
-        history = get_events(t["phone"], limit=50)
-        t["history"] = [e for e in history if t["phone"] == e.get("phone", t["phone"])][:10]
     return {"tasks": tasks}
 
 
