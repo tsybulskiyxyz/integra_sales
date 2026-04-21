@@ -2056,7 +2056,7 @@
             document.getElementById('modalReminder').value = '';
             document.getElementById('modalRepeat').checked = false;
             toggleRepeat();
-            const item = rowsData.find(r => r.phone === phone && r.row_index === row);
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === Number(row));
             const name = item?.econom_number || '';
             document.getElementById('modalClientInfo').textContent = `${phone}${name ? ' / ' + name : ''}`;
             document.getElementById('modalObjAddress').value = item?.object_address || '';
@@ -2250,14 +2250,14 @@
 
         async function saveLocalStatus(el) {
             const phone = el.dataset.phone;
-            const row = +el.dataset.row;
+            const row = Number(el.dataset.row);
             const status = el.value;
             await fetch('/api/local-status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ phone, sheet_row: row, local_status: status })
             });
-            const item = rowsData.find(r => r.phone === phone && r.row_index === row);
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
             if (item) item.local_status = status;
             renderFunnel();
             renderCalls();
@@ -2265,7 +2265,7 @@
 
         async function saveEconom(el) {
             const phone = el.dataset.phone;
-            const row = +el.dataset.row;
+            const row = Number(el.dataset.row);
             const val = el.value.trim();
             await fetch('/api/econom-number', {
                 method: 'POST',
@@ -2288,7 +2288,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            const item = rowsData.find(r => r.phone === phone && r.row_index === sheetRow);
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === Number(sheetRow));
             if (item) {
                 item.object_address = data.address;
                 item.object_area = data.area;

@@ -32,6 +32,7 @@ from database import (
     set_local_status,
     set_object_info,
     get_row_extras,
+    resolve_row_extra,
     get_last_activity_by_row,
     add_event,
     get_events,
@@ -162,7 +163,7 @@ def _build_weekly_report() -> Optional[str]:
         kp_count = 0
         for r in reached_week:
             key = (r.phone, r.row_index)
-            local_status = extras.get(key, {}).get("local_status", "first_contact")
+            local_status = resolve_row_extra(extras, r.phone, r.row_index).get("local_status", "first_contact")
             stage_rank = max_stages.get(key, 0)
             if local_status in ("proposal_sent", "closed") or stage_rank >= 3:
                 kp_count += 1
@@ -390,8 +391,8 @@ async def get_dashboard():
     inactive = get_inactive_clients(days=3)
     extras = get_row_extras()
     for item in today_rem + overdue:
-        key = (item["phone"], item["sheet_row"])  
-        extra = extras.get(key, {})
+        sr = item.get("sheet_row")
+        extra = resolve_row_extra(extras, item.get("phone") or "", sr) if sr is not None else {}
         item["client_name"] = extra.get("econom_number", "")
     for item in inactive:
         item["days_silent"] = ""
@@ -428,7 +429,7 @@ async def get_data():
         if r.status == RowStatus.ORANGE:
             continue
         key = (r.phone, r.row_index)
-        extra = extras.get(key, {})
+        extra = resolve_row_extra(extras, r.phone, r.row_index)
         if not extra and r.status != RowStatus.GREEN:
             continue
         if not extra:

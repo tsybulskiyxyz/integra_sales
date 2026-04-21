@@ -14,6 +14,75 @@ def get_connection():
     return sqlite3.connect(DATABASE_PATH)
 
 
+def _phone_suffix10(phone: Optional[str]) -> str:
+    """Последние 10 цифр номера — для сопоставления вариантов записи (+7… / 8… / без кода)."""
+    d = re.sub(r"\D", "", phone or "")
+    return d[-10:] if len(d) >= 10 else ""
+
+
+_EXTRA_STATUS_RANK = {
+    "first_contact": 0,
+    "negotiation": 1,
+    "waiting": 2,
+    "proposal_sent": 3,
+    "closed": 4,
+    "contractors": 2,
+    "rejected": -1,
+    "low_interest": -1,
+}
+
+
+def _merge_row_extras_dicts(candidates: list[dict]) -> dict:
+    """Объединить несколько row_extras для одной строки листа (разный текст телефона в ключе)."""
+    if not candidates:
+        return {}
+    if len(candidates) == 1:
+        return dict(candidates[0])
+    out = {k: v for k, v in candidates[0].items()}
+    for v in candidates[1:]:
+        for fld in ("econom_number", "object_address", "object_area", "object_budget", "object_work_type"):
+            ov, nv = (out.get(fld) or "").strip(), (v.get(fld) or "").strip()
+            if not ov and nv:
+                out[fld] = v[fld]
+    statuses = [(c.get("local_status") or "first_contact").strip() for c in candidates if c]
+    statuses = [s for s in statuses if s]
+    if not statuses:
+        out["local_status"] = "first_contact"
+    else:
+        out["local_status"] = max(statuses, key=lambda s: _EXTRA_STATUS_RANK.get(s, -99))
+    return out
+
+
+def resolve_row_extra(extras: dict[tuple[str, int], dict], phone: str, sheet_row: int) -> dict:
+    """Найти extra для строки Google: сначала точный (phone, row), иначе та же строка и те же 10 цифр."""
+    phone = (phone or "").strip()
+    try:
+        ri = int(sheet_row)
+    except (TypeError, ValueError):
+        return {}
+    keys_seen: set[tuple[str, int]] = set()
+    collected: list[dict] = []
+
+    def take(k: tuple[str, int]) -> None:
+        if k in keys_seen or k not in extras:
+            return
+        keys_seen.add(k)
+        collected.append(extras[k])
+
+    take((phone, ri))
+    suf = _phone_suffix10(phone)
+    if suf:
+        for (p, row_i), v in extras.items():
+            try:
+                if int(row_i) != ri:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            if _phone_suffix10(p) == suf:
+                take((p, int(row_i)))
+    return _merge_row_extras_dicts(collected)
+
+
 def init_db():
     """Инициализация таблиц."""
     conn = get_connection()
@@ -380,6 +449,8 @@ def get_status_overrides() -> dict[tuple[str, int], str]:
 
 def set_econom_number(phone: str, sheet_row: int, econom_number: Optional[str]):
     """Сохранить номер эконом для строки."""
+    phone = (phone or "").strip()
+    sheet_row = int(sheet_row)
     conn = get_connection()
     try:
         conn.execute(
@@ -394,6 +465,9 @@ def set_econom_number(phone: str, sheet_row: int, econom_number: Optional[str]):
 
 def set_local_status(phone: str, sheet_row: int, local_status: str):
     """Сохранить локальный статус для строки."""
+    phone = (phone or "").strip()
+    sheet_row = int(sheet_row)
+    local_status = (local_status or "").strip() or "first_contact"
     conn = get_connection()
     try:
         conn.execute(
@@ -413,13 +487,13 @@ def get_row_extras() -> dict[tuple[str, int], dict]:
         rows = conn.execute(
             "SELECT phone, sheet_row, econom_number, local_status, object_address, object_area, object_budget, object_work_type FROM row_extras"
         ).fetchall()
-        return {(r[0], r[1]): {
-            "econom_number": r[2] or "",
-            "local_status": r[3] or "first_contact",
-            "object_address": r[4] or "",
-            "object_area": r[5] or "",
-            "object_budget": r[6] or "",
-            "object_work_type": r[7] or "",
+        return {(str(r[0]).strip(), int(r[1])): {
+            "econom_number": (r[2] or "").strip(),
+            "local_status": (r[3] or "").strip() or "first_contact",
+            "object_address": (r[4] or "").strip(),
+            "object_area": (r[5] or "").strip(),
+            "object_budget": (r[6] or "").strip(),
+            "object_work_type": (r[7] or "").strip(),
         } for r in rows}
     finally:
         conn.close()
@@ -427,6 +501,8 @@ def get_row_extras() -> dict[tuple[str, int], dict]:
 
 def set_object_info(phone: str, sheet_row: int, address: str, area: str, budget: str, work_type: str):
     """Сохранить информацию об объекте."""
+    phone = (phone or "").strip()
+    sheet_row = int(sheet_row)
     conn = get_connection()
     try:
         conn.execute(
