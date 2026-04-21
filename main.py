@@ -34,6 +34,7 @@ from database import (
     get_row_extras,
     resolve_row_extra,
     get_last_activity_by_row,
+    resolve_last_activity,
     add_event,
     get_events,
     delete_event,
@@ -428,7 +429,6 @@ async def get_data():
     for r in rows:
         if r.status == RowStatus.ORANGE:
             continue
-        key = (r.phone, r.row_index)
         extra = resolve_row_extra(extras, r.phone, r.row_index)
         if not extra and r.status != RowStatus.GREEN:
             continue
@@ -444,7 +444,7 @@ async def get_data():
             "phone": r.phone,
             "status": r.status.value,
             "creation_time": r.creation_time,
-            "last_activity": last_activity_map.get(key),
+            "last_activity": resolve_last_activity(last_activity_map, r.phone, r.row_index),
             "econom_number": extra.get("econom_number", ""),
             "local_status": local_status,
             "max_stage": max_stage,

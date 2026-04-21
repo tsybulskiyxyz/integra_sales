@@ -835,9 +835,35 @@ def get_last_activity_by_row() -> dict[tuple[str, int], str]:
                FROM events WHERE sheet_row IS NOT NULL
                GROUP BY phone, sheet_row"""
         ).fetchall()
-        return {(r[0], r[1]): r[2] for r in rows if r[2]}
+        return {(str(r[0]).strip(), int(r[1])): r[2] for r in rows if r[2]}
     finally:
         conn.close()
+
+
+def resolve_last_activity(activity_map: dict[tuple[str, int], str], phone: str, sheet_row: int) -> Optional[str]:
+    """Дата последней активности для строки: точный ключ или те же sheet_row и последние 10 цифр телефона."""
+    phone = (phone or "").strip()
+    try:
+        ri = int(sheet_row)
+    except (TypeError, ValueError):
+        return None
+    direct = activity_map.get((phone, ri))
+    if direct:
+        return direct
+    suf = _phone_suffix10(phone)
+    if not suf:
+        return None
+    best: Optional[str] = None
+    for (p, row_i), ts in activity_map.items():
+        try:
+            if int(row_i) != ri:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if _phone_suffix10(str(p)) == suf:
+            if best is None or ts > best:
+                best = ts
+    return best
 
 
 def get_inactive_clients(days: int = 3) -> list[dict]:

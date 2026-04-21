@@ -1038,6 +1038,18 @@
             return `${dd}.${mm}.${yy}`;
         }
 
+        /** Обновить колонку «Обновлено» в кэше строк после сохранения без полного loadData (иначе при renderCalls() после смены вкладки откатится). */
+        function bumpRowsDataActivity(phone, sheetRow) {
+            if (sheetRow === null || sheetRow === undefined || sheetRow === '') return;
+            const row = Number(sheetRow);
+            if (Number.isNaN(row)) return;
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
+            if (!item) return;
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            item.last_activity = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
         function updateStats() {
             if (activePeriod === 'all') {
                 document.getElementById('targetPercent').textContent = allStats.target_percent + '%';
@@ -2270,7 +2282,10 @@
                 return;
             }
             const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
-            if (item) item.local_status = status;
+            if (item) {
+                item.local_status = status;
+                bumpRowsDataActivity(phone, row);
+            }
             renderFunnel();
             renderCalls();
         }
@@ -2290,10 +2305,18 @@
                 if (!r.ok) {
                     alert(typeof d.detail === 'string' ? d.detail : ('Не удалось сохранить имя (' + r.status + ')'));
                     await loadData();
+                    return;
                 }
             } catch (e) {
                 alert(e.message || 'Ошибка сети');
+                return;
             }
+            const item = rowsData.find(r => r.phone === phone && Number(r.row_index) === row);
+            if (item) {
+                item.econom_number = val;
+                bumpRowsDataActivity(phone, row);
+            }
+            renderCalls();
         }
 
         async function saveModalObjectInfo(phone, sheetRow) {
@@ -2342,6 +2365,7 @@
                 }
                 await saveModalObjectInfo(phone, sheetRow);
                 if (!text.trim() && hasObject) alert('Данные объекта сохранены');
+                bumpRowsDataActivity(phone, sheetRow);
                 closeModal();
                 return;
             }
@@ -2358,6 +2382,7 @@
                 const d = await r.json();
                 alert(d.ok ? 'Отправлено' : 'Ошибка отправки');
                 await saveModalObjectInfo(phone, sheetRow);
+                if (d.ok) bumpRowsDataActivity(phone, sheetRow);
                 closeModal();
                 return;
             }
@@ -2389,6 +2414,7 @@
                 alert('Напоминание запланировано');
             }
             await saveModalObjectInfo(phone, sheetRow);
+            bumpRowsDataActivity(phone, sheetRow);
             closeModal();
         }
 
