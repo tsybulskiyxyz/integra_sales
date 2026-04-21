@@ -1399,18 +1399,24 @@
             try {
                 const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_name }) });
                 const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Ошибка');
+                const item = legalLeadsData.find(x => x.id === id);
+                if (item) {
+                    item.company_name = d.company_name != null ? d.company_name : company_name;
+                    if (d.updated_at) item.updated_at = d.updated_at;
+                }
+                renderLegalTable();
             } catch (e) {
                 alert(e.message);
+                await loadLegalCrm();
             }
-            await loadLegalCrm();
         }
 
         async function patchLegalStatus(id, status) {
             try {
                 const r = await fetch('/api/legal/leads/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
                 const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || 'Ошибка');
+                if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Ошибка');
                 await loadLegalCrm();
             } catch (e) { alert(e.message); loadLegalCrm(); }
         }

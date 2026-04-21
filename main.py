@@ -791,7 +791,13 @@ async def api_legal_lead_patch(request: Request, lead_id: int, data: LegalLeadPa
             f"Статус: {LEGAL_LEAD_STATUS_LABELS.get(old_status, old_status)} → {LEGAL_LEAD_STATUS_LABELS.get(dump['status'], dump['status'])}",
             "status_change",
         )
-    return {"ok": True}
+    row_after = legal_lead_get(lead_id)
+    return {
+        "ok": True,
+        "updated_at": (row_after or {}).get("updated_at"),
+        "status": (row_after or {}).get("status"),
+        "company_name": (row_after or {}).get("company_name"),
+    }
 
 
 @app.post("/api/legal/leads/{lead_id}/events")

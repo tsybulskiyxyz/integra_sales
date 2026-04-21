@@ -1303,7 +1303,7 @@ def legal_lead_create(
             (
                 company_name.strip(),
                 inn.strip(),
-                phone.strip(),
+                normalize_crm_phone(phone).strip(),
                 email.strip(),
                 okved.strip(),
                 region.strip(),
@@ -1367,7 +1367,11 @@ def legal_lead_update(
             (
                 (company_name if company_name is not None else row["company_name"]).strip(),
                 (inn if inn is not None else row["inn"]).strip(),
-                (phone if phone is not None else row["phone"]).strip(),
+                (
+                    normalize_crm_phone(phone).strip()
+                    if phone is not None
+                    else (row["phone"] or "").strip()
+                ),
                 (email if email is not None else row["email"]).strip(),
                 (okved if okved is not None else row["okved"]).strip(),
                 (region if region is not None else row["region"]).strip(),
@@ -1446,23 +1450,25 @@ def legal_import_upsert_row(
         old = legal_lead_get(eid)
         if not old:
             return "skipped", -1
+        # Импорт с листа обновляет только карточку компании, не этап воронки (как row_extras у физиков).
         legal_lead_update(
             eid,
             company_name=cn if cn else None,
             inn=inn if inn else None,
-            phone=_nz(phone_s) if phone_s else None,
+            phone=_nz(normalize_crm_phone(phone_s)) if phone_s else None,
             email=_nz(email),
             okved=_nz(okved),
             region=_nz(region),
             next_contact_at=nc_raw if nc_raw else None,
             priority=pr,
-            status=st_sheet if st_sheet and source == "google_sheet" else None,
+            status=None,
         )
         return "updated", eid
+    phone_new = normalize_crm_phone(phone_s) if (phone_s or "").strip() else ""
     nid = legal_lead_create(
         cn,
         inn,
-        phone_s,
+        phone_new,
         (email or "").strip(),
         (okved or "").strip(),
         (region or "").strip(),
