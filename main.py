@@ -63,6 +63,7 @@ from database import (
     legal_lead_create,
     legal_lead_update,
     legal_lead_add_event,
+    legal_last_status_change_description,
     legal_lead_events,
     legal_import_upsert_row,
     legal_lead_get,
@@ -249,6 +250,7 @@ class ReminderInput(BaseModel):
     reminder_at: str
     sheet_row: Optional[int] = None
     recipient_telegram_id: Optional[str] = None
+    lead_id: Optional[int] = None
 
 
 class SendNowInput(BaseModel):
@@ -786,11 +788,12 @@ async def api_legal_lead_patch(request: Request, lead_id: int, data: LegalLeadPa
     if not ok:
         raise HTTPException(404, "Не найдено")
     if dump.get("status") and dump["status"] != old_status:
-        legal_lead_add_event(
-            lead_id,
-            f"Статус: {LEGAL_LEAD_STATUS_LABELS.get(old_status, old_status)} → {LEGAL_LEAD_STATUS_LABELS.get(dump['status'], dump['status'])}",
-            "status_change",
+        st_desc = (
+            f"Статус: {LEGAL_LEAD_STATUS_LABELS.get(old_status, old_status)} → "
+            f"{LEGAL_LEAD_STATUS_LABELS.get(dump['status'], dump['status'])}"
         )
+        if legal_last_status_change_description(lead_id) != st_desc:
+            legal_lead_add_event(lead_id, st_desc, "status_change")
     row_after = legal_lead_get(lead_id)
     return {
         "ok": True,
@@ -1114,6 +1117,12 @@ async def api_delete_event(event_id: int):
 async def api_add_reminder(data: ReminderInput):
     add_reminder(data.phone, data.text, data.reminder_at, data.sheet_row, data.recipient_telegram_id)
     add_event(data.phone, "reminder_created", f"Напоминание на {data.reminder_at}: {data.text}", data.sheet_row)
+    if data.lead_id is not None and legal_lead_get(data.lead_id):
+        legal_lead_add_event(
+            data.lead_id,
+            f"Напоминание на {data.reminder_at}: {data.text}",
+            "reminder_created",
+        )
     return {"ok": True}
 
 

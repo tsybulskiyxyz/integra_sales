@@ -265,6 +265,7 @@ def init_db():
             pass
         _migrate_row_extras_add_id(conn)
         _dedupe_row_extras_normalized(conn)
+        _dedupe_legal_lead_status_events(conn)
         _migrate_legal_lead_statuses(conn)
         conn.commit()
     finally:
@@ -344,6 +345,43 @@ def _dedupe_row_extras_normalized(conn: sqlite3.Connection) -> None:
             rid = int(r[0])
             if rid != keep_id:
                 conn.execute("DELETE FROM row_extras WHERE id=?", (rid,))
+
+
+def _dedupe_legal_lead_status_events(conn: sqlite3.Connection) -> None:
+    """Один раз при старте: у каждого лида не больше одной строки на одинаковый текст смены статуса."""
+    try:
+        groups = conn.execute(
+            """SELECT lead_id, description, MAX(id) AS keep_id
+               FROM legal_lead_events
+               WHERE event_type = 'status_change'
+               GROUP BY lead_id, description"""
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return
+    for lead_id, desc, keep_id in groups:
+        conn.execute(
+            """DELETE FROM legal_lead_events
+               WHERE lead_id = ? AND event_type = 'status_change'
+                 AND description = ? AND id != ?""",
+            (lead_id, desc, keep_id),
+        )
+
+
+def legal_last_status_change_description(lead_id: int) -> Optional[str]:
+    """Текст последней записи о смене статуса (чтобы не плодить дубли при повторном PATCH)."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """SELECT description FROM legal_lead_events
+               WHERE lead_id = ? AND event_type = 'status_change'
+               ORDER BY id DESC LIMIT 1""",
+            (int(lead_id),),
+        ).fetchone()
+        if not row or row[0] is None:
+            return None
+        return str(row[0]).strip()
+    finally:
+        conn.close()
 
 
 def _migrate_legal_lead_statuses(conn):

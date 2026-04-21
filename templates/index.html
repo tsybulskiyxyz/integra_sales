@@ -1623,6 +1623,7 @@
                                 reminder_at: ts,
                                 sheet_row: null,
                                 recipient_telegram_id: recipient,
+                                lead_id: leadId,
                             }),
                         });
                     }
@@ -1637,6 +1638,7 @@
                             reminder_at: at.replace('T', ' '),
                             sheet_row: null,
                             recipient_telegram_id: recipient,
+                            lead_id: leadId,
                         }),
                     });
                     alert('Напоминание запланировано');
