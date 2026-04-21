@@ -313,6 +313,7 @@ def add_comment(phone: str, comment: str, sheet_row: Optional[int] = None):
 
 def add_reminder(phone: str, reminder_text: str, reminder_at: str, sheet_row: Optional[int] = None, recipient_telegram_id: Optional[str] = None):
     """Добавить напоминание."""
+    phone = (phone or "").strip()
     conn = get_connection()
     try:
         conn.execute(
@@ -540,6 +541,7 @@ def set_object_info(phone: str, sheet_row: int, address: str, area: str, budget:
 
 def add_event(phone: str, event_type: str, description: str, sheet_row: Optional[int] = None):
     """Записать событие в лог клиента."""
+    phone = (phone or "").strip()
     conn = get_connection()
     try:
         conn.execute(
@@ -552,14 +554,32 @@ def add_event(phone: str, event_type: str, description: str, sheet_row: Optional
 
 
 def get_events(phone: str, limit: int = 50) -> list[dict]:
-    """Получить историю событий по клиенту (новые сверху)."""
+    """Получить историю событий по клиенту (новые сверху). Совпадение по точному телефону или по последним 10 цифрам."""
+    phone = (phone or "").strip()
     conn = get_connection()
     try:
+        suf = _phone_suffix10(phone)
+        if not suf:
+            rows = conn.execute(
+                "SELECT id, event_type, description, created_at FROM events WHERE phone = ? ORDER BY created_at DESC LIMIT ?",
+                (phone, limit),
+            ).fetchall()
+            return [{"id": r[0], "type": r[1], "description": r[2], "created_at": r[3]} for r in rows]
+
+        # В БД номер мог быть записан в другом формате (+7 / 8 / без кода), чем в строке таблицы
+        scan_cap = min(max(limit * 40, 200), 3000)
         rows = conn.execute(
-            "SELECT id, event_type, description, created_at FROM events WHERE phone = ? ORDER BY created_at DESC LIMIT ?",
-            (phone, limit)
+            "SELECT id, event_type, description, created_at, phone FROM events ORDER BY created_at DESC LIMIT ?",
+            (scan_cap,),
         ).fetchall()
-        return [{"id": r[0], "type": r[1], "description": r[2], "created_at": r[3]} for r in rows]
+        out = []
+        for r in rows:
+            ep = (r[4] or "").strip()
+            if ep == phone or _phone_suffix10(ep) == suf:
+                out.append({"id": r[0], "type": r[1], "description": r[2], "created_at": r[3]})
+                if len(out) >= limit:
+                    break
+        return out
     finally:
         conn.close()
 
